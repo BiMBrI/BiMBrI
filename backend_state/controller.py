@@ -105,14 +105,7 @@ async def polar_pump(
     print("[polar] pump starting", flush=True)
     ait = monitor_fn(**kwargs).__aiter__()
     try:
-        while not stop_event.is_set():
-            try:
-                hr_code, bpm, resp_code, resp_bpm = await asyncio.wait_for(
-                    ait.__anext__(), timeout=0.5)
-            except asyncio.TimeoutError:
-                continue
-            except StopAsyncIteration:
-                break
+        async for hr_code, bpm, resp_code, resp_bpm in ait:
             ts = time.monotonic()
             hr_slot.update(hr_code, ts, {"bpm": bpm})
             if resp_code is not None:
