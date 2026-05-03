@@ -3,7 +3,8 @@
 Beer me Brain Interface
 
 To view a detailed description visit [GH PAGES PLACEHOLDER](https://placeholder.com) or the general
-project [writeup](writeup.md).
+project [writeup](writeup.md). To view a detailed description of the Lerobot setup head to the 
+[lerobot](robot/lerobot.md) page.
 
 ## Setup
 
