@@ -1,9 +1,21 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 import subprocess, datetime, asyncio
+import mistune
 
 app = FastAPI()
 state = {"status": "idle", "last_event": None, "last_time": None}
+subscribers = []
+
+# Reading writeup
+with open("writeup.md") as f:
+    WRITEUP = f.read()
+writeup_html = mistune.html(WRITEUP)
+
+async def broadcast():
+    data = f"data: {state['status']} | {state['last_event']} | {state['last_time']}\n\n"
+    for queue in subscribers:
+        await queue.put(data)
 
 @app.post("/trigger_rest")
 async def trigger(event: dict):
@@ -13,8 +25,8 @@ async def trigger(event: dict):
     state["last_event"] = event
     state["last_time"] = datetime.datetime.now().isoformat()
     state["status"] = "replaying"
-    
-    asyncio.create_task(run_replay())
+    await broadcast() 
+    asyncio.create_task(run_replay_rest())
     return {"ok": True, "status": "rest"}
 
 @app.post("/trigger_aroused")
@@ -25,8 +37,8 @@ async def trigger(event: dict):
     state["last_event"] = event
     state["last_time"] = datetime.datetime.now().isoformat()
     state["status"] = "replaying"
-    
-    asyncio.create_task(run_replay())
+    await broadcast() 
+    asyncio.create_task(run_replay_rest())
     return {"ok": True, "status": "aroused"}
 
 # TODO update to rest subroutine
@@ -41,6 +53,7 @@ async def run_replay_rest():
     )
     await proc.wait()
     state["status"] = "idle"
+    await broadcast()
 
 # TODO update to aroused subroutine
 async def run_replay_aroused():
@@ -54,17 +67,44 @@ async def run_replay_aroused():
     )
     await proc.wait()
     state["status"] = "idle"
+    await broadcast()
 
+@app.get("/events")
+async def events():
+    queue = asyncio.Queue()
+    subscribers.append(queue)
+    async def stream():
+        try:
+            while True:
+                data = await queue.get()
+                yield data
+        finally:
+            subscribers.remove(queue)
+    return StreamingResponse(stream(), media_type="text/event-stream")
 
 @app.get("/", response_class=HTMLResponse)
 async def ui():
+    writeup_html = mistune.html(WRITEUP)
     return f"""
     <html>
-    <head><meta http-equiv="refresh" content="2"></head>
+    <head>
+        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+        <script>
+            const es = new EventSource('/events');
+            es.onmessage = e => {{
+                const [status, event, time] = e.data.split(' | ');
+                document.getElementById('status').textContent = status;
+                document.getElementById('event').textContent = event;
+                document.getElementById('time').textContent = time;
+            }};
+        </script>
+    </head>
     <body>
-        <h1>Robot Status: {state['status']}</h1>
-        <p>Last event: {state['last_event']}</p>
-        <p>Time: {state['last_time']}</p>
+        <h1>Robot Status: <span id="status">loading...</span></h1>
+        <p>Last event: <span id="event">-</span></p>
+        <p>Time: <span id="time">-</span></p>
+        <hr>
+        {writeup_html}
     </body>
     </html>
     """

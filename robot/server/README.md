@@ -3,7 +3,7 @@
 To run:
 
 ```sh
-pip install fastapi uvicorn
+pip install fastapi uvicorn mistune
 uvicorn server:app --host 0.0.0.0 --port 8000
 ```
 
