@@ -2,8 +2,9 @@
 
 BiMBrI is a real-time robotic intervention system that responds to biometric signals from a wearable monitor.
 When a physiological event is detected (e.g. elevated arousal state), a signal is pushed to the robot server,
-which triggers a pre-recorded arm movement subroutine.
+which triggers a pre-recorded arm movement subroutine. 
 
+From a thousand foot view, BiMBrI backend is a set of biomarker tools, with a multimodal logic layer on top. This backend passes bio-state information to a front end that acts as a control plane for robotic arms.
 ## States
 
 | State | Description |
