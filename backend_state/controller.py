@@ -267,8 +267,8 @@ def parse_args() -> argparse.Namespace:
                        help="BPM threshold for code=1 (default 100).")
     polar.add_argument("--polar-scan-timeout", type=float, default=10.0)
 
-    polar.add_argument("--resp-high-threshold", type=float, default=24.0,
-                   help="Resp rate upper threshold in bpm for code=1 (default 24).")
+    polar.add_argument("--resp-high-threshold", type=float, default=10.0,
+                   help="Resp rate upper threshold in bpm for code=1 (default 10).")
     polar.add_argument("--resp-low-threshold", type=float, default=8.0,
                    help="Resp rate lower threshold in bpm for code=2 (default 8).")
 
