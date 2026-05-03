@@ -4,15 +4,23 @@ from fastapi.staticfiles import StaticFiles
 import subprocess, datetime, asyncio
 import mistune
 
-app = FastAPI()
-state = {"status": "idle", "last_event": None, "last_time": None}
-subscribers = []
+COOLDOWN_SECS = 25
 
 # Reading writeup
 with open("static/writeup.md") as f:
     WRITEUP = f.read()
 md = mistune.create_markdown(plugins=['math', 'table'])
 writeup_html = md(WRITEUP)
+
+app = FastAPI()
+state = {"status": "idle", "last_event": None, "last_time": None, "last_completed": None}
+subscribers = []
+
+def is_cooling_down():
+    if state["last_completed"] is None:
+        return False
+    elapsed = (datetime.datetime.now() - state["last_completed"]).total_seconds()
+    return elapsed < COOLDOWN_SECS
 
 # mounting js
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -23,30 +31,27 @@ async def broadcast():
         await queue.put(data)
 
 @app.post("/trigger_rest")
-async def trigger(event: dict):
-    if state["status"] == "replaying":
-        raise HTTPException(status_code=409, detail="Arm is busy replaying")
-    
+async def trigger_rest(event: dict):
+    if state["status"] == "replaying" or is_cooling_down():
+        return {"ok": False}
     state["last_event"] = event
     state["last_time"] = datetime.datetime.now().isoformat()
     state["status"] = "replaying"
-    await broadcast() 
+    await broadcast()
     asyncio.create_task(run_replay_rest())
     return {"ok": True, "status": "rest"}
 
 @app.post("/trigger_aroused")
-async def trigger(event: dict):
-    if state["status"] == "replaying":
-        raise HTTPException(status_code=409, detail="Arm is busy replaying")
-    
+async def trigger_aroused(event: dict):
+    if state["status"] == "replaying" or is_cooling_down():
+        return {"ok": False}
     state["last_event"] = event
     state["last_time"] = datetime.datetime.now().isoformat()
     state["status"] = "replaying"
-    await broadcast() 
-    asyncio.create_task(run_replay_arouse())
+    await broadcast()
+    asyncio.create_task(run_replay_aroused())
     return {"ok": True, "status": "aroused"}
 
-# TODO update to rest subroutine
 async def run_replay_rest():
     proc = await asyncio.create_subprocess_exec(
         "lerobot-replay",
@@ -58,6 +63,7 @@ async def run_replay_rest():
     )
     await proc.wait()
     state["status"] = "idle"
+    state["last_completed"] = datetime.datetime.now()
     await broadcast()
 
 # TODO update to aroused subroutine
@@ -72,10 +78,16 @@ async def run_replay_aroused():
     )
     await proc.wait()
     state["status"] = "idle"
+    state["last_completed"] = datetime.datetime.now()
     await broadcast()
+
 @app.get("/state")
 async def get_state():
-    return state
+    cooling = is_cooling_down()
+    remaining = 0
+    if cooling:
+        remaining = COOLDOWN_SECS - (datetime.datetime.now() - state["last_completed"]).total_seconds()
+    return {**state, "cooling_down": cooling, "cooldown_remaining": round(remaining)}
 
 @app.get("/events")
 async def events():
