@@ -36,7 +36,7 @@ git submodule update --init --recursive
 |-------|-----------|
 | Heart rate | Polar H10 + `bleak` (BLE) |
 | EEG | OpenBCI Cyton + Daisy + `brainflow` |
-| Inference/Models TODO | IDK |
+| Inference | Dempster-Shafer combination + HMM forward filter (`backend_state/`) |
 | Robot control | LeRobot, SO-101 leader/follower arms |
 | Server | FastAPI + uvicorn |
 | Web UI | Server-Sent Events, mistune, MathJax |
