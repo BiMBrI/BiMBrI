@@ -60,13 +60,13 @@ OpenBCI Cyton + Daisy (16-channel) via `brainflow`. Band power (theta, alpha, be
 real-time using Welch's method on a sliding window, and thresholded to emit discrete event codes.
 
 ### Chest Electrocardiogram (ECG): 
-ECG can be used to estimate Breath Rate in bmp, another useful metric in medicine for rest vs. arousal/activity states. Our scripts for breathrate used the repo availabe from "https://www.nature.com/articles/s41598-023-50470-0".
+ECG can be used to estimate Breath Rate in bmp, another useful metric in medicine for rest vs. arousal/activity states. Our scripts for breathrate used the repo availabe from [here](https://www.nature.com/articles/s41598-023-50470).
 
 ### Electroencephalogram (EEG): 
 EEG is a very unique and valuable metric for all sorts of pysical state estimations. Our model uses 3 EEG subtasks, alpha bandpower, theta band power, and beta band power. Here alpha, theta, and beta refer to specific frequency ranges that are corrolated with rest / arousal states.  
 
 ## Dempster Shafer Theory 
-DST is a generalization of Baysien inference that is particularly useful in combining uncertain, or conflicting data from multipul sources. In the context of BiMBrI, the output of each of out Biomarker tools is converted into a probability assingment for the frame of discerment (the set representing all states). DST provides a method of combining these probabilities to a single probability vector, with entries Probability(Arousal), Probability(Null), Probability(Rest), Probability(Ignorance). DST is able to handle conflicting probability assigments from sources by leveraging the {Ignorance} set, where uncertain probability can be assined. See more on DST at " https://www.stat.berkeley.edu/~aldous/Real_World/dempster_shafer.pdf"
+DST is a generalization of Baysien inference that is particularly useful in combining uncertain, or conflicting data from multipul sources. In the context of BiMBrI, the output of each of out Biomarker tools is converted into a probability assingment for the frame of discerment (the set representing all states). DST provides a method of combining these probabilities to a single probability vector, with entries Probability(Arousal), Probability(Null), Probability(Rest), Probability(Ignorance). DST is able to handle conflicting probability assigments from sources by leveraging the {Ignorance} set, where uncertain probability can be assined. See more on DST [here](https://www.stat.berkeley.edu/~aldous/Real_World/dempster_shafer.pdf).
 
 The `backend_state/` package implements the math layer that turns biomarker codes
 into a posterior over `{rest, arousal, null}`.
