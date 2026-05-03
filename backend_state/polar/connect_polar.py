@@ -31,6 +31,10 @@ from bleak.backends.device import BLEDevice
 # Standard BLE Heart Rate Measurement characteristic (org.bluetooth.characteristic.heart_rate_measurement).
 HR_MEASUREMENT_UUID = "00002a37-0000-1000-8000-00805f9b34fb"
 
+RR_WINDOW = 16
+RR_SMOOTH = 16
+RR_FREQ_MIN = 5 / 60
+RR_FREQ_MAX = 40 /60
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Stream HR from a Polar BLE sensor")
@@ -90,6 +94,57 @@ def parse_hr_measurement(data: bytes) -> tuple[int, list[int]]:
 
     return bpm, rr_ms
 
+def estimate_rr_from_rr_intervals(
+    rr_buffer: deque,
+    fs_resample: float = 4.0,
+    ) -> float | None:
+    """
+    Estimate respiratory rate (breaths/min) from a buffer of RR intervals (ms).
+
+    Uses oscillations in the RR interval series (respiratory sinus arrhythmia)
+    as a proxy for the QRS amplitude modulation method described in:
+
+        Roberts et al., Sci Rep 14, 167 (2024).
+        https://doi.org/10.1038/s41598-023-50470-0
+
+    Note: This uses RR interval variability rather than QRS amplitude envelope
+    (the Polar H10 does not expose raw ECG). Accuracy is lower than the full
+    algorithm, particularly during exercise or arrhythmia.
+
+    Args:
+        rr_buffer: deque of RR intervals in ms, most recent last.
+        fs_resample: target sampling rate (Hz) for uniform resampling.
+
+    Returns:
+        Estimated respiratory rate in breaths/min, or None if insufficient data.
+    """
+    if len(rr_buffer) < RR_WINDOW:
+        return None
+
+    rr = np.array(list(rr_buffer)[-RR_WINDOW:], dtype=float)
+
+    # Convert RR intervals to cumulative time axis (seconds)
+    t = np.cumsum(rr) / 1000.0
+    t -= t[0]
+
+    # Resample onto uniform grid
+    t_uniform = np.arange(0, t[-1], 1.0 / fs_resample)
+    if len(t_uniform) < 4:
+        return None
+    rr_uniform = np.interp(t_uniform, t, rr)
+
+    # Welch PSD — 512-point FFT matching Roberts et al.
+    nfft = 512
+    nperseg = min(len(rr_uniform), nfft)
+    freqs, psd = welch(rr_uniform, fs=fs_resample, nperseg=nperseg, nfft=nfft)
+
+    # Find dominant peak in respiratory band
+    mask = (freqs >= RR_FREQ_MIN) & (freqs <= RR_FREQ_MAX)
+    if not mask.any():
+        return None
+
+    peak_freq = freqs[mask][np.argmax(psd[mask])]
+    return peak_freq * 60.0  # Hz -> bpm
 
 async def monitor_hr(
     threshold: int = 100,
@@ -141,6 +196,48 @@ async def monitor_hr(
             with suppress(Exception):
                 await client.stop_notify(HR_MEASUREMENT_UUID)
 
+async def monitor_resp(
+    threshold: float = 20.0,
+    name: Optional[str] = None,
+    scan_timeout: float = 10.0,
+    duration: Optional[float] = None,
+) -> AsyncIterator[tuple[int, float]]:
+    """
+    Yields (code, resp_bpm) per heartbeat.
+    code = 1 when resp_rate >= threshold, else 0.
+    """
+    device = await find_polar(name, scan_timeout)
+    queue: asyncio.Queue[tuple[int, float]] = asyncio.Queue()
+    rr_estimator = RespiratoryRateEstimator()
+
+    def on_notify(_handle: int, data: bytearray) -> None:
+        _bpm, rr_list = parse_hr_measurement(bytes(data))
+        for rr_ms in rr_list:
+            resp = rr_estimator.update(rr_ms)
+            if resp is not None:
+                code = 1 if resp >= threshold else 0
+                queue.put_nowait((code, resp))
+
+    async with BleakClient(device) as client:
+        await client.start_notify(HR_MEASUREMENT_UUID, on_notify)
+        t_start = asyncio.get_event_loop().time()
+        try:
+            while True:
+                if duration is not None:
+                    remaining = duration - (asyncio.get_event_loop().time() - t_start)
+                    if remaining <= 0:
+                        return
+                    try:
+                        item = await asyncio.wait_for(queue.get(), timeout=remaining)
+                    except asyncio.TimeoutError:
+                        return
+                else:
+                    item = await queue.get()
+                yield item
+        finally:
+            with suppress(Exception):
+                await client.stop_notify(HR_MEASUREMENT_UUID)
+
 
 async def stream_hr(client: BleakClient, save_path: Optional[str], stop: asyncio.Event) -> None:
     fh = open(save_path, "a", newline="") if save_path else None
@@ -151,15 +248,12 @@ async def stream_hr(client: BleakClient, save_path: Optional[str], stop: asyncio
     def on_notify(_handle: int, data: bytearray) -> None:
         t_ns = time.time_ns()
         bpm, rr_list = parse_hr_measurement(bytes(data))
-        # Each notification carries one HR value plus 0..N RR samples.
         rr_str = ",".join(str(r) for r in rr_list) if rr_list else "-"
-        print(f"HR  {bpm:>3} bpm   rr={rr_str:<14} t={t_ns}")
-        if writer:
-            if rr_list:
-                for rr in rr_list:
-                    writer.writerow([t_ns, bpm, rr])
-            else:
-                writer.writerow([t_ns, bpm, ""])
+        resp = None
+        for rr_ms in rr_list:
+            resp = rr_estimator.update(rr_ms)
+        resp_str = f"{resp:.1f}" if resp is not None else "---"
+        print(f"HR {bpm:>3} bpm  rr={rr_str:<14} resp={resp_str:>5} brpm  t={t_ns}")
 
     try:
         await client.start_notify(HR_MEASUREMENT_UUID, on_notify)

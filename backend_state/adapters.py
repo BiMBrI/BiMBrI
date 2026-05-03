@@ -51,3 +51,9 @@ def heart_rate_mass(code: int) -> Mass:
         return HEART_RATE_MASS[code]
     except KeyError:
         raise ValueError(f"unknown heart-rate code {code!r}; expected 0 or 1")
+
+def resp_rate_mass(code: int) -> Mass:
+    """code=1 → elevated respiration → arousal, code=0 → rest."""
+    if code == 1:
+        return Mass(rest=0.1, arousal=0.6, null=0.1, theta=0.2)
+    return Mass(rest=0.5, arousal=0.1, null=0.3, theta=0.1)
