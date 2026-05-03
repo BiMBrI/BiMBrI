@@ -3,14 +3,14 @@ Per-source DST adapters: discrete threshold codes from the biomarker
 monitor scripts -> mass functions over Θ = {rest, arousal, null} plus
 the ignorance slot m(Θ).
 
-Bandpower codes match `eeg/monitor.py`:
+Bandpower codes match `backend_state/eeg/monitor.py`:
 
     0  no band over threshold      ->  null
     1  theta band over threshold   ->  weak arousal/null hint, mostly ignorance
     2  alpha band over threshold   ->  strong rest signal
     3  beta  band over threshold   ->  no diagnostic value here, pure ignorance
 
-Heart-rate codes match `hr/connect_polar.py`:
+Heart-rate codes match `backend_state/polar/connect_polar.py`:
 
     0  below threshold             ->  rest or null (equally)
     1  at or above threshold       ->  strong arousal signal
@@ -38,7 +38,7 @@ HEART_RATE_MASS: dict[int, Mass] = {
 
 
 def bandpower_mass(code: int) -> Mass:
-    """Map an `eeg.monitor` band-trigger code (0/1/2/3) to a DST mass."""
+    """Map a `backend_state.eeg.monitor` band-trigger code (0/1/2/3) to a DST mass."""
     try:
         return BANDPOWER_MASS[code]
     except KeyError:
@@ -46,7 +46,7 @@ def bandpower_mass(code: int) -> Mass:
 
 
 def heart_rate_mass(code: int) -> Mass:
-    """Map a `hr.connect_polar` threshold code (0/1) to a DST mass."""
+    """Map a `backend_state.polar.connect_polar` threshold code (0/1) to a DST mass."""
     try:
         return HEART_RATE_MASS[code]
     except KeyError:
