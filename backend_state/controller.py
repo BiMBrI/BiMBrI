@@ -269,8 +269,8 @@ def parse_args() -> argparse.Namespace:
 
     polar.add_argument("--resp-high-threshold", type=float, default=10.0,
                    help="Resp rate upper threshold in bpm for code=1 (default 10).")
-    polar.add_argument("--resp-low-threshold", type=float, default=8.0,
-                   help="Resp rate lower threshold in bpm for code=2 (default 8).")
+    polar.add_argument("--resp-low-threshold", type=float, default=4.0,
+                   help="Resp rate lower threshold in bpm for code=2 (default 4).")
 
     fusion = p.add_argument_group("Fusion + HMM")
     fusion.add_argument("--tick", type=float, default=0.5,

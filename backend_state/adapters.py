@@ -12,7 +12,7 @@ Bandpower codes match `backend_state/eeg/monitor.py`:
 
 Heart-rate codes match `backend_state/polar/connect_polar.py`:
 
-    0  below threshold             ->  rest or null (equally)
+    0  below threshold             ->  null
     1  at or above threshold       ->  strong arousal signal
 
 Respiratory-rate codes match `backend_state/polar/connect_polar.py`:
@@ -38,7 +38,7 @@ BANDPOWER_MASS: dict[int, Mass] = {
 }
 
 HEART_RATE_MASS: dict[int, Mass] = {
-    0: Mass(rest=0.5, arousal=0.0, null=0.5, theta=0.0),
+    0: Mass(rest=0.0, arousal=0.0, null=1.0, theta=0.0),
     1: Mass(rest=0.0, arousal=1.0, null=0.0, theta=0.0),
 }
 
