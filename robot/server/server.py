@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 import subprocess, datetime, asyncio
 import mistune
 
@@ -8,9 +9,12 @@ state = {"status": "idle", "last_event": None, "last_time": None}
 subscribers = []
 
 # Reading writeup
-with open("writeup.md") as f:
+with open("static/writeup.md") as f:
     WRITEUP = f.read()
 writeup_html = mistune.html(WRITEUP)
+
+# mounting js
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 async def broadcast():
     data = f"data: {state['status']} | {state['last_event']} | {state['last_time']}\n\n"
@@ -89,20 +93,15 @@ async def ui():
     <html>
     <head>
         <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-        <script>
-            const es = new EventSource('/events');
-            es.onmessage = e => {{
-                const [status, event, time] = e.data.split(' | ');
-                document.getElementById('status').textContent = status;
-                document.getElementById('event').textContent = event;
-                document.getElementById('time').textContent = time;
-            }};
-        </script>
+        <script src="/static/stat.js"></script>
+        <link rel="stylesheet" href="/static/style.css">
     </head>
     <body>
-        <h1>Robot Status: <span id="status">loading...</span></h1>
-        <p>Last event: <span id="event">-</span></p>
-        <p>Time: <span id="time">-</span></p>
+        <div class="status-panel">
+            <h1>Robot Status: <span id="status">loading...</span></h1>
+            <p>Last event: <span id="event">-</span></p>
+            <p>Time: <span id="time">-</span></p>
+        </div>
         <hr>
         {writeup_html}
     </body>
