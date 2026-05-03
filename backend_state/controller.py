@@ -180,14 +180,31 @@ def run_loop(
     stop_event: threading.Event,
 ) -> None:
     t0 = time.monotonic()
+    required = [(name, slot) for name, slot in
+                (("eeg", eeg_slot), ("polar", polar_slot), ("resp", resp_slot))
+                if slot is not None]
+    all_connected = False
     while not stop_event.is_set():
         now = time.monotonic()
-        masses: list[Mass] = []
 
         eeg_snap = eeg_slot.snapshot() if eeg_slot else None
         polar_snap = polar_slot.snapshot() if polar_slot else None
         resp_snap = resp_slot.snapshot() if resp_slot else None
 
+        if not all_connected:
+            snaps = {"eeg": eeg_snap, "polar": polar_snap, "resp": resp_snap}
+            missing = [name for name, slot in required
+                       if snaps[name] is None or snaps[name][0] is None]
+            if missing:
+                print(f"[t={now - t0:7.2f}s] waiting for: {', '.join(missing)}",
+                      flush=True)
+                stop_event.wait(tick_sec)
+                continue
+            all_connected = True
+            print(f"[t={now - t0:7.2f}s] all sources connected, starting fusion.",
+                  flush=True)
+
+        masses: list[Mass] = []
         if eeg_snap and eeg_snap[0] is not None:
             age = now - eeg_snap[1]
             masses.append(discount(bandpower_mass(eeg_snap[0]),
@@ -201,11 +218,7 @@ def run_loop(
             masses.append(discount(resp_rate_mass(resp_snap[0]),
                                    trust_from_age(age, tau_sec)))
 
-        # Don't tick the HMM until at least one source has produced a sample;
-        # otherwise it drifts toward the transition's stationary distribution
-        # purely from prior updates.
         if not masses:
-            print(f"[t={now - t0:7.2f}s] waiting for first samples...", flush=True)
             stop_event.wait(tick_sec)
             continue
 
