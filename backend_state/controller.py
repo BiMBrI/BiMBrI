@@ -92,16 +92,20 @@ class EEGWorker(threading.Thread):
 
 
 class PolarWorker(threading.Thread):
+    """Single BLE connection to Polar; updates both HR and resp slots."""
+
     def __init__(
         self,
         monitor_fn: Callable,
-        slot: Slot,
+        hr_slot: Slot,
+        resp_slot: Slot,
         stop_event: threading.Event,
         kwargs: dict,
     ) -> None:
         super().__init__(name="polar-worker", daemon=True)
         self._monitor_fn = monitor_fn
-        self._slot = slot
+        self._hr_slot = hr_slot
+        self._resp_slot = resp_slot
         self._stop_event = stop_event
         self._kwargs = kwargs
 
@@ -117,12 +121,16 @@ class PolarWorker(threading.Thread):
         try:
             while not self._stop_event.is_set():
                 try:
-                    code, bpm = await asyncio.wait_for(ait.__anext__(), timeout=0.5)
+                    hr_code, bpm, resp_code, resp_bpm = await asyncio.wait_for(
+                        ait.__anext__(), timeout=0.5)
                 except asyncio.TimeoutError:
                     continue
                 except StopAsyncIteration:
                     break
-                self._slot.update(code, time.monotonic(), {"bpm": bpm})
+                ts = time.monotonic()
+                self._hr_slot.update(hr_code, ts, {"bpm": bpm})
+                if resp_code is not None:
+                    self._resp_slot.update(resp_code, ts, {"bpm": resp_bpm})
         finally:
             with suppress(Exception):
                 await ait.aclose()
@@ -336,25 +344,17 @@ def main() -> None:
 
     if args.polar:
         try:
-            from .polar.connect_polar import monitor_hr, monitor_resp
+            from .polar.connect_polar import monitor_hr_resp
         except ImportError as exc:
             sys.exit(f"error: --polar requires bleak ({exc})")
         polar_slot = Slot()
-        workers.append(PolarWorker(
-            monitor_hr, polar_slot, stop_event,
-            kwargs=dict(
-                threshold=args.polar_threshold,
-                name=args.polar_name,
-                scan_timeout=args.polar_scan_timeout,
-            ),
-        ))
-
         resp_slot = Slot()
         workers.append(PolarWorker(
-            monitor_resp, resp_slot, stop_event,
+            monitor_hr_resp, polar_slot, resp_slot, stop_event,
             kwargs=dict(
-                high_threshold=args.resp_high_threshold,
-                low_threshold=args.resp_low_threshold,
+                hr_threshold=args.polar_threshold,
+                resp_high_threshold=args.resp_high_threshold,
+                resp_low_threshold=args.resp_low_threshold,
                 name=args.polar_name,
                 scan_timeout=args.polar_scan_timeout,
             ),

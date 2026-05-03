@@ -269,6 +269,62 @@ async def monitor_resp(
                 await client.stop_notify(HR_MEASUREMENT_UUID)
 
 
+async def monitor_hr_resp(
+    hr_threshold: int = 100,
+    resp_high_threshold: float = 24.0,
+    resp_low_threshold: float = 8.0,
+    name: Optional[str] = None,
+    scan_timeout: float = 10.0,
+    duration: Optional[float] = None,
+) -> AsyncIterator[tuple[int, int, Optional[int], Optional[float]]]:
+    """Single BLE connection; yields (hr_code, bpm, resp_code, resp_bpm).
+
+    resp_code and resp_bpm are None until the RR-interval buffer has enough
+    samples to produce an estimate. The Polar H10 only accepts one BLE
+    connection at a time, so HR and respiratory rate share this stream.
+    """
+    device = await find_polar(name, scan_timeout)
+    queue: asyncio.Queue[tuple[int, int, Optional[int], Optional[float]]] = asyncio.Queue()
+    rr_estimator = RespiratoryRateEstimator()
+
+    def on_notify(_handle: int, data: bytearray) -> None:
+        bpm, rr_list = parse_hr_measurement(bytes(data))
+        hr_code = 1 if bpm >= hr_threshold else 0
+        resp_code: Optional[int] = None
+        resp_val: Optional[float] = None
+        for rr_ms in rr_list:
+            r = rr_estimator.update(rr_ms)
+            if r is not None:
+                resp_val = r
+                if r >= resp_high_threshold:
+                    resp_code = 1
+                elif r <= resp_low_threshold:
+                    resp_code = 2
+                else:
+                    resp_code = 0
+        queue.put_nowait((hr_code, bpm, resp_code, resp_val))
+
+    async with BleakClient(device) as client:
+        await client.start_notify(HR_MEASUREMENT_UUID, on_notify)
+        t_start = asyncio.get_event_loop().time()
+        try:
+            while True:
+                if duration is not None:
+                    remaining = duration - (asyncio.get_event_loop().time() - t_start)
+                    if remaining <= 0:
+                        return
+                    try:
+                        item = await asyncio.wait_for(queue.get(), timeout=remaining)
+                    except asyncio.TimeoutError:
+                        return
+                else:
+                    item = await queue.get()
+                yield item
+        finally:
+            with suppress(Exception):
+                await client.stop_notify(HR_MEASUREMENT_UUID)
+
+
 async def stream_hr(client: BleakClient, save_path: Optional[str], stop: asyncio.Event) -> None:
     fh = open(save_path, "a", newline="") if save_path else None
     writer = csv.writer(fh) if fh else None
