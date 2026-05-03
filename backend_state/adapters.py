@@ -15,6 +15,12 @@ Heart-rate codes match `backend_state/polar/connect_polar.py`:
     0  below threshold             ->  rest or null (equally)
     1  at or above threshold       ->  strong arousal signal
 
+Respiratory-rate codes match `backend_state/polar/connect_polar.py`:
+
+    0  between thresholds          ->  pure ignorance (no trip)
+    1  at or above high threshold  ->  arousal (hyperventilation/exertion)
+    2  at or below low threshold   ->  rest (depressed breathing)
+
 These are point-in-time encodings of one sensor reading. Trust
 discounting and temporal decay are applied separately by `dst.discount`
 and `dst.trust_from_age` before combination.
@@ -36,6 +42,12 @@ HEART_RATE_MASS: dict[int, Mass] = {
     1: Mass(rest=0.0, arousal=1.0, null=0.0, theta=0.0),
 }
 
+RESP_RATE_MASS: dict[int, Mass] = {
+    0: Mass(rest=0.0, arousal=0.0, null=0.0, theta=1.0),
+    1: Mass(rest=0.0, arousal=0.8, null=0.0, theta=0.2),
+    2: Mass(rest=0.8, arousal=0.0, null=0.0, theta=0.2),
+}
+
 
 def bandpower_mass(code: int) -> Mass:
     """Map a `backend_state.eeg.monitor` band-trigger code (0/1/2/3) to a DST mass."""
@@ -53,7 +65,8 @@ def heart_rate_mass(code: int) -> Mass:
         raise ValueError(f"unknown heart-rate code {code!r}; expected 0 or 1")
 
 def resp_rate_mass(code: int) -> Mass:
-    """code=1 → elevated respiration → arousal, code=0 → rest."""
-    if code == 1:
-        return Mass(rest=0.1, arousal=0.6, null=0.1, theta=0.2)
-    return Mass(rest=0.5, arousal=0.1, null=0.3, theta=0.1)
+    """Map a `backend_state.polar.connect_polar` resp threshold code (0/1/2) to a DST mass."""
+    try:
+        return RESP_RATE_MASS[code]
+    except KeyError:
+        raise ValueError(f"unknown resp-rate code {code!r}; expected 0, 1, or 2")
