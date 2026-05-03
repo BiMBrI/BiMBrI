@@ -2,27 +2,9 @@
 
 BiMBrI is a real-time robotic intervention system that responds to biometric signals from a wearable monitor.
 When a physiological event is detected (e.g. elevated arousal state), a signal is pushed to the robot server,
-which triggers a pre-recorded arm movement subroutine.
+which triggers a pre-recorded arm movement subroutine. 
 
-## States
-
-| State | Description |
-|-------|-------------|
-| `idle` | Arm is ready, waiting for a trigger |
-| `replaying` | Arm is executing a recorded subroutine |
-
-## Data Set
-
-EEG recording dataset found 
-[here](https://ieee-dataport.org/open-access/regulation-arousal-online-neurofeedback-improves-human-performance-demanding-sensory), 
-pertinent to the binary task of arousal and no arousal, where arousal is heightened activity and energy (Joseph Faler, 2019).
-
-Robot movement dataset found [here](https://huggingface.co/binkd/datasets) (Nathaniel Chappelle, 2026).
-
-## Subroutines
-
-- **rest** — places an energy drink within reach of the user
-- **aroused** — places an *exciting* beverage within reach of the user
+From a thousand foot view, BiMBrI backend is a set of biomarker tools, with a multimodal logic layer on top. This backend passes bio-state information to a front end that acts as a control plane for robotic arms.
 
 ## System Architecture
 
@@ -44,17 +26,47 @@ $$
 \text{argmax}\,P(\text{state}_t) \xrightarrow{\text{POST }/\text{trigger_rest},/\text{trigger_aroused}\text{ on state change}} \text{Robot Server} \xrightarrow{\text{lerobot-replay}} \text{SO-101 Arm}
 $$
 
+
+
+
+## Data Sets
+
+EEG recording dataset found 
+[here](https://ieee-dataport.org/open-access/regulation-arousal-online-neurofeedback-improves-human-performance-demanding-sensory), 
+pertinent to the binary task of arousal and no arousal, where arousal is heightened activity and energy (Joseph Faler, 2019).
+
+Robot movement dataset found [here](https://huggingface.co/binkd/datasets) (Nathaniel Chappelle, 2026).
+
+## Subroutines
+
+- **rest** — places an energy drink within reach of the user
+- **aroused** — places an *exciting* beverage within reach of the user
+
+
+
 ## Tech Stack
 
-BiMBrI integrates biometric sensing hardware with a robotic arm through a lightweight Python server stack.
+## Backend
+The BiMBrI backend is made up of 5 biomarker tools, with an unused 6th, a partially built logistic classifier. The goal of these tools is to contibute information about the user's pysical states.
 
-### Biometric Sensing
+## Physical States
+This tool looks for three state types, an aroused state, a resting state, and a null state. 
 
-Heart rate is streamed from a Polar H10 chest strap over BLE using `bleak`. EEG is acquired from an
+## Biomarker Tools
+
+### Heartrate: 
+Heartrate is a valuable measure in medicine for Resting states, and in young adults is particularly correlated with activity level. Heart rate is streamed from a Polar H10 chest strap over BLE using `bleak`. EEG is acquired from an
 OpenBCI Cyton + Daisy (16-channel) via `brainflow`. Band power (theta, alpha, beta) is computed in
 real-time using Welch's method on a sliding window, and thresholded to emit discrete event codes.
 
-### Inference & State Estimation
+### Chest Electrocardiogram (ECG): 
+ECG can be used to estimate Breath Rate in bmp, another useful metric in medicine for rest vs. arousal/activity states. Our scripts for breathrate used the repo availabe from "https://www.nature.com/articles/s41598-023-50470-0".
+
+### Electroencephalogram (EEG): 
+EEG is a very unique and valuable metric for all sorts of pysical state estimations. Our model uses 3 EEG subtasks, alpha bandpower, theta band power, and beta band power. Here alpha, theta, and beta refer to specific frequency ranges that are corrolated with rest / arousal states.  
+
+## Dempster Shafer Theory 
+DST is a generalization of Baysien inference that is particularly useful in combining uncertain, or conflicting data from multipul sources. In the context of BiMBrI, the output of each of out Biomarker tools is converted into a probability assingment for the frame of discerment (the set representing all states). DST provides a method of combining these probabilities to a single probability vector, with entries Probability(Arousal), Probability(Null), Probability(Rest), Probability(Ignorance). DST is able to handle conflicting probability assigments from sources by leveraging the {Ignorance} set, where uncertain probability can be assined. See more on DST at " https://www.stat.berkeley.edu/~aldous/Real_World/dempster_shafer.pdf"
 
 The `backend_state/` package implements the math layer that turns biomarker codes
 into a posterior over `{rest, arousal, null}`.
@@ -67,6 +79,9 @@ sensor gracefully fades to total ignorance instead of pinning the fused belief
 on a dead reading. The discounted masses are then combined via Dempster's rule;
 on total conflict the layer falls back to ignorance rather than crashing the
 real-time loop.
+
+## Hidden Markov Model
+To get an accurate current state, we take out probability vector from the DST step, and use a hiddem markov model to compare our observed state probability against our current state, and the likelyhood of moving from our current state to the state implied by our probability vector. 
 
 The combined mass yields a pignistic probability vector
 $\text{Bet}P = (P(\text{rest}), P(\text{arousal}), P(\text{null}))$ which is
@@ -95,11 +110,19 @@ the pending retry: reverting to the last-delivered state cancels it,
 errors use a short fixed backoff so the next HMM tick can retry quickly
 without hammering an unreachable server.
 
-### Robot Control
+
+### Robot Control - Front end
 
 The SO-101 leader/follower arm pair is controlled via [LeRobot](https://github.com/huggingface/lerobot).
 Subroutines are recorded through teleoperation, uploaded to Hugging Face, and replayed deterministically. 
 The leader arm is used to demonstrate a gesture once; the follower arm replays it on demand.
+
+### States
+
+| State | Description |
+|-------|-------------|
+| `idle` | Arm is ready, waiting for a trigger |
+| `replaying` | Arm is executing a recorded subroutine |
 
 ### Server
 

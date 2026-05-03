@@ -33,7 +33,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from .adapters import bandpower_mass, heart_rate_mass
+from .adapters import bandpower_mass, heart_rate_mass, resp_rate_mass
 from .dst import IGNORANCE, Mass, combine, discount, trust_from_age
 from .hmm import HMM
 from .webapp import WebAppNotifier
@@ -73,59 +73,46 @@ class EEGWorker(threading.Thread):
         super().__init__(name="eeg-worker", daemon=True)
         self._monitor_fn = monitor_fn
         self._slot = slot
-        self._stop = stop_event
+        self._stop_event = stop_event
         self._kwargs = kwargs
 
     def run(self) -> None:
         gen = self._monitor_fn(**self._kwargs)
         try:
             for code, powers in gen:
-                if self._stop.is_set():
+                if self._stop_event.is_set():
                     break
                 self._slot.update(code, time.monotonic(), powers)
         except Exception as exc:
             print(f"[eeg] worker error: {exc!r}", file=sys.stderr, flush=True)
-            self._stop.set()
+            self._stop_event.set()
         finally:
             with suppress(Exception):
                 gen.close()
 
 
-class PolarWorker(threading.Thread):
-    def __init__(
-        self,
-        monitor_fn: Callable,
-        slot: Slot,
-        stop_event: threading.Event,
-        kwargs: dict,
-    ) -> None:
-        super().__init__(name="polar-worker", daemon=True)
-        self._monitor_fn = monitor_fn
-        self._slot = slot
-        self._stop = stop_event
-        self._kwargs = kwargs
-
-    def run(self) -> None:
-        try:
-            asyncio.run(self._main())
-        except Exception as exc:
-            print(f"[polar] worker error: {exc!r}", file=sys.stderr, flush=True)
-            self._stop.set()
-
-    async def _main(self) -> None:
-        ait = self._monitor_fn(**self._kwargs).__aiter__()
-        try:
-            while not self._stop.is_set():
-                try:
-                    code, bpm = await asyncio.wait_for(ait.__anext__(), timeout=0.5)
-                except asyncio.TimeoutError:
-                    continue
-                except StopAsyncIteration:
-                    break
-                self._slot.update(code, time.monotonic(), {"bpm": bpm})
-        finally:
-            with suppress(Exception):
-                await ait.aclose()
+async def polar_pump(
+    monitor_fn: Callable,
+    hr_slot: Slot,
+    resp_slot: Slot,
+    stop_event: threading.Event,
+    kwargs: dict,
+) -> None:
+    """Run the combined HR+resp generator on the current asyncio loop and
+    update both slots. Must run on the main thread's loop on macOS — bleak's
+    CoreBluetooth backend wedges on connect when called from a worker thread.
+    """
+    print("[polar] pump starting", flush=True)
+    ait = monitor_fn(**kwargs).__aiter__()
+    try:
+        async for hr_code, bpm, resp_code, resp_bpm in ait:
+            ts = time.monotonic()
+            hr_slot.update(hr_code, ts, {"bpm": bpm})
+            if resp_code is not None:
+                resp_slot.update(resp_code, ts, {"bpm": resp_bpm})
+    finally:
+        with suppress(Exception):
+            await ait.aclose()
 
 
 def _format_eeg(snap: tuple[Optional[int], Optional[float], dict]) -> str:
@@ -142,6 +129,13 @@ def _format_polar(snap: tuple[Optional[int], Optional[float], dict]) -> str:
     if code is None:
         return "hr=---"
     return f"hr={code}({extra.get('bpm', '?')}bpm)"
+
+
+def _format_resp(snap: tuple[Optional[int], Optional[float], dict]) -> str:
+    code, _ts, extra = snap
+    if code is None:
+        return "resp=---"
+    return f"resp={code}({extra.get('bpm', '?')}bpm)"
 
 
 def _classify_notify(
@@ -165,6 +159,7 @@ def run_loop(
     *,
     eeg_slot: Optional[Slot],
     polar_slot: Optional[Slot],
+    resp_slot: Optional[Slot],
     notifier: Optional[WebAppNotifier],
     hmm: HMM,
     tick_sec: float,
@@ -172,13 +167,31 @@ def run_loop(
     stop_event: threading.Event,
 ) -> None:
     t0 = time.monotonic()
+    required = [(name, slot) for name, slot in
+                (("eeg", eeg_slot), ("polar", polar_slot), ("resp", resp_slot))
+                if slot is not None]
+    all_connected = False
     while not stop_event.is_set():
         now = time.monotonic()
-        masses: list[Mass] = []
 
         eeg_snap = eeg_slot.snapshot() if eeg_slot else None
         polar_snap = polar_slot.snapshot() if polar_slot else None
+        resp_snap = resp_slot.snapshot() if resp_slot else None
 
+        if not all_connected:
+            snaps = {"eeg": eeg_snap, "polar": polar_snap, "resp": resp_snap}
+            missing = [name for name, slot in required
+                       if snaps[name] is None or snaps[name][0] is None]
+            if missing:
+                print(f"[t={now - t0:7.2f}s] waiting for: {', '.join(missing)}",
+                      flush=True)
+                stop_event.wait(tick_sec)
+                continue
+            all_connected = True
+            print(f"[t={now - t0:7.2f}s] all sources connected, starting fusion.",
+                  flush=True)
+
+        masses: list[Mass] = []
         if eeg_snap and eeg_snap[0] is not None:
             age = now - eeg_snap[1]
             masses.append(discount(bandpower_mass(eeg_snap[0]),
@@ -187,12 +200,12 @@ def run_loop(
             age = now - polar_snap[1]
             masses.append(discount(heart_rate_mass(polar_snap[0]),
                                    trust_from_age(age, tau_sec)))
+        if resp_snap and resp_snap[0] is not None:
+            age = now - resp_snap[1]
+            masses.append(discount(resp_rate_mass(resp_snap[0]),
+                                   trust_from_age(age, tau_sec)))
 
-        # Don't tick the HMM until at least one source has produced a sample;
-        # otherwise it drifts toward the transition's stationary distribution
-        # purely from prior updates.
         if not masses:
-            print(f"[t={now - t0:7.2f}s] waiting for first samples...", flush=True)
             stop_event.wait(tick_sec)
             continue
 
@@ -211,12 +224,12 @@ def run_loop(
             parts.append(_format_eeg(eeg_snap))
         if polar_slot is not None:
             parts.append(_format_polar(polar_snap))
-        if resp_slot:
-            snap = resp_slot.snapshot()
-            if snap[0] is not None:
-                age = now - snap[1]
-                masses.append(discount(resp_rate_mass(snap[0]),
-                                       trust_from_age(age, tau_sec)))
+            hr_bpm = polar_snap[2].get("bpm", "?") if polar_snap else "?"
+            parts.append(f"hr_bpm={hr_bpm}")
+        if resp_slot is not None:
+            parts.append(_format_resp(resp_snap))
+            br_bpm = resp_snap[2].get("bpm", "?") if resp_snap else "?"
+            parts.append(f"br_bpm={br_bpm}")
         parts.append(f"| m=(r{combined.rest:.2f} a{combined.arousal:.2f} "
                      f"n{combined.null:.2f} θ{combined.theta:.2f})")
         parts.append(f"p=(r{belief[0]:.2f} a{belief[1]:.2f} n{belief[2]:.2f})")
@@ -248,13 +261,16 @@ def parse_args() -> argparse.Namespace:
 
     polar = p.add_argument_group("Polar HR sensor")
     polar.add_argument("--polar", action="store_true", help="Enable Polar HR source.")
-    polar.add_argument("--polar-name", help="Substring of BLE device name (default: any 'Polar').")
-    polar.add_argument("--polar-threshold", type=int, default=100,
-                       help="BPM threshold for code=1 (default 100).")
+    polar.add_argument("--polar-name",
+                       help="Substring of BLE device name (default: any 'Polar').")
+    polar.add_argument("--polar-threshold", type=int, default=85,
+                       help="BPM threshold for code=1 (default 85).")
     polar.add_argument("--polar-scan-timeout", type=float, default=10.0)
 
-    polar.add_argument("--resp-threshold", type=float, default=20.0,
-                   help="Resp rate threshold in bpm for code=1 (default 20).")
+    polar.add_argument("--resp-high-threshold", type=float, default=10.0,
+                   help="Resp rate upper threshold in bpm for code=1 (default 10).")
+    polar.add_argument("--resp-low-threshold", type=float, default=4.0,
+                   help="Resp rate lower threshold in bpm for code=2 (default 4).")
 
     fusion = p.add_argument_group("Fusion + HMM")
     fusion.add_argument("--tick", type=float, default=0.5,
@@ -271,6 +287,56 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+async def amain(
+    *,
+    args: argparse.Namespace,
+    eeg_slot: Optional[Slot],
+    polar_slot: Optional[Slot],
+    resp_slot: Optional[Slot],
+    eeg_workers: list[threading.Thread],
+    notifier: Optional[WebAppNotifier],
+    hmm: HMM,
+    stop_event: threading.Event,
+) -> None:
+    polar_task: Optional[asyncio.Task] = None
+    if args.polar and polar_slot is not None and resp_slot is not None:
+        from .polar.connect_polar import monitor_hr_resp
+        polar_task = asyncio.create_task(polar_pump(
+            monitor_hr_resp, polar_slot, resp_slot, stop_event,
+            kwargs=dict(
+                hr_threshold=args.polar_threshold,
+                resp_high_threshold=args.resp_high_threshold,
+                resp_low_threshold=args.resp_low_threshold,
+                name=args.polar_name,
+                scan_timeout=args.polar_scan_timeout,
+            ),
+        ))
+
+    for w in eeg_workers:
+        w.start()
+
+    loop = asyncio.get_running_loop()
+    try:
+        await loop.run_in_executor(None, lambda: run_loop(
+            eeg_slot=eeg_slot,
+            polar_slot=polar_slot,
+            resp_slot=resp_slot,
+            notifier=notifier,
+            hmm=hmm,
+            tick_sec=args.tick,
+            tau_sec=args.tau,
+            stop_event=stop_event,
+        ))
+    finally:
+        stop_event.set()
+        if polar_task is not None:
+            polar_task.cancel()
+            with suppress(asyncio.CancelledError, Exception):
+                await polar_task
+        for w in eeg_workers:
+            w.join(timeout=5.0)
+
+
 def main() -> None:
     args = parse_args()
     if not (args.eeg or args.polar):
@@ -279,9 +345,10 @@ def main() -> None:
         sys.exit("error: --eeg requires --eeg-port")
 
     stop_event = threading.Event()
-    workers: list[threading.Thread] = []
+    eeg_workers: list[threading.Thread] = []
     eeg_slot: Optional[Slot] = None
     polar_slot: Optional[Slot] = None
+    resp_slot: Optional[Slot] = None
 
     if args.eeg:
         try:
@@ -289,7 +356,7 @@ def main() -> None:
         except ImportError as exc:
             sys.exit(f"error: --eeg requires brainflow ({exc})")
         eeg_slot = Slot()
-        workers.append(EEGWorker(
+        eeg_workers.append(EEGWorker(
             monitor_bandpower, eeg_slot, stop_event,
             kwargs=dict(
                 port=args.eeg_port,
@@ -306,33 +373,14 @@ def main() -> None:
 
     if args.polar:
         try:
-            from .polar.connect_polar import monitor_hr, monitor_resp
+            from .polar.connect_polar import monitor_hr_resp  # noqa: F401
         except ImportError as exc:
             sys.exit(f"error: --polar requires bleak ({exc})")
         polar_slot = Slot()
-        workers.append(PolarWorker(
-            monitor_hr, polar_slot, stop_event,
-            kwargs=dict(
-                threshold=args.polar_threshold,
-                name=args.polar_name,
-                scan_timeout=args.polar_scan_timeout,
-            ),
-        ))
-
         resp_slot = Slot()
-        workers.append(PolarWorker(
-            monitor_resp, resp_slot, stop_event,
-            kwargs=dict(
-                threshold=args.resp_threshold,
-                name=args.polar_name,
-                scan_timeout=args.polar_scan_timeout,
-            ),
-        ))
 
     notifier = (WebAppNotifier(args.webapp_url, timeout=args.webapp_timeout)
                 if args.webapp_url else None)
-
-    resp_slot: Optional[Slot] = None
 
     hmm = HMM()
 
@@ -344,26 +392,20 @@ def main() -> None:
     print(f"Starting: {', '.join(enabled)}  tick={args.tick}s tau={args.tau}s "
           f"webapp={args.webapp_url or 'DRY-RUN'}", flush=True)
 
-    for w in workers:
-        w.start()
-
     try:
-        run_loop(
+        asyncio.run(amain(
+            args=args,
             eeg_slot=eeg_slot,
             polar_slot=polar_slot,
+            resp_slot=resp_slot,
+            eeg_workers=eeg_workers,
             notifier=notifier,
             hmm=hmm,
-            tick_sec=args.tick,
-            tau_sec=args.tau,
             stop_event=stop_event,
-        )
+        ))
     except KeyboardInterrupt:
         print("\nStopping...", flush=True)
-    finally:
-        stop_event.set()
-        for w in workers:
-            w.join(timeout=5.0)
-        print("Stopped.", flush=True)
+    print("Stopped.", flush=True)
 
 
 if __name__ == "__main__":

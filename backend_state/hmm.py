@@ -19,7 +19,7 @@ within their row:
 
                  rest  arousal  null
         rest   [ 0.45, 0.10,   0.45 ]
-        arousal[ 0.10, 0.45,   0.45 ]
+        arousal[ 0.10, 0.30,   0.60 ]
         null   [ 1/3,  1/3,    1/3  ]
 
 The default initial belief asserts certainty in `null`, matching the
@@ -39,7 +39,7 @@ STATES: tuple[str, str, str] = ("rest", "arousal", "null")
 
 DEFAULT_TRANSITION = np.array([
     [0.45,     0.10,     0.45    ],
-    [0.10,     0.45,     0.45    ],
+    [0.10,     0.30,     0.60    ],
     [1.0 / 3,  1.0 / 3,  1.0 / 3 ],
 ])
 
