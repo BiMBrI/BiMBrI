@@ -11,7 +11,8 @@ subscribers = []
 # Reading writeup
 with open("static/writeup.md") as f:
     WRITEUP = f.read()
-writeup_html = mistune.html(WRITEUP)
+md = mistune.create_markdown(plugins=['math'])
+writeup_html = md(WRITEUP)
 
 # mounting js
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -88,7 +89,6 @@ async def events():
 
 @app.get("/", response_class=HTMLResponse)
 async def ui():
-    writeup_html = mistune.html(WRITEUP)
     return f"""
     <html>
     <head>
