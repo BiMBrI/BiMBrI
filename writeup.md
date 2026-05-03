@@ -33,15 +33,15 @@ $$
 $$
 
 $$
-\text{HR Monitor} + \text{EEG Monitor} \xrightarrow{\text{raw streams}} \text{Inference Server}
+\text{HR Monitor} + \text{EEG Monitor} \xrightarrow{\text{threshold codes}} \text{DST Adapters} \xrightarrow{\text{per-source } m(\cdot)} \text{Dempster's Rule}
 $$
 
 $$
-\text{Inference Server} \xrightarrow{\text{HMM + state estimation}} P(\text{state}_{t} \mid \text{obs}_{{1:t}})
+\text{Dempster's Rule} \xrightarrow{\text{fused mass } m_{\oplus}} \text{HMM Forward Filter} \xrightarrow{} P(\text{state}_{t} \mid \text{obs}_{{1:t}})
 $$
 
 $$
-P(\text{state}_t) \xrightarrow{\text{POST /trigger on state change}} \text{Robot Server} \xrightarrow{\text{lerobot-replay}} \text{SO-101 Arm}
+\text{argmax}\,P(\text{state}_t) \xrightarrow{\text{POST }/\text{trigger\_rest},/\text{trigger\_aroused}\text{ on state change}} \text{Robot Server} \xrightarrow{\text{lerobot-replay}} \text{SO-101 Arm}
 $$
 
 ## Tech Stack
@@ -53,6 +53,41 @@ BiMBrI integrates biometric sensing hardware with a robotic arm through a lightw
 Heart rate is streamed from a Polar H10 chest strap over BLE using `bleak`. EEG is acquired from an
 OpenBCI Cyton + Daisy (16-channel) via `brainflow`. Band power (theta, alpha, beta) is computed in
 real-time using Welch's method on a sliding window, and thresholded to emit discrete event codes.
+
+### Inference & State Estimation
+
+The `backend_state/` package implements the math layer that turns biomarker codes
+into a posterior over `{rest, arousal, null}`.
+
+Each source's threshold code is mapped to a Dempster-Shafer mass function over
+the frame of discernment $\Theta = \{\text{rest}, \text{arousal}, \text{null}\}$
+with an explicit ignorance slot $m(\Theta)$. Before fusion, each source is
+discounted by sample age, $\alpha = \exp(-\Delta t / \tau)$, so a stale or dead
+sensor gracefully fades to total ignorance instead of pinning the fused belief
+on a dead reading. The discounted masses are then combined via Dempster's rule;
+on total conflict the layer falls back to ignorance rather than crashing the
+real-time loop.
+
+The combined mass yields a pignistic probability vector
+$\text{Bet}P = (P(\text{rest}), P(\text{arousal}), P(\text{null}))$ which is
+fed as a soft emission likelihood into a 3-state hidden Markov model:
+
+$$
+\text{belief}_t \propto (T^{\!\top} \cdot \text{belief}_{t-1}) \odot \text{Bet}P_t
+$$
+
+The hand-tuned transition matrix encodes one prior fact &mdash; a direct
+rest&nbsp;$\leftrightarrow$&nbsp;arousal jump is unlikely &mdash; while leaving
+all other intra-row transitions a priori equally likely. The initial belief
+asserts certainty in `null`, matching "the system has just started, nothing
+observed yet".
+
+A small dispatcher (`webapp.py`) watches the argmax-ed posterior and, on a
+state *change*, POSTs to the robot server's `/trigger_rest` or
+`/trigger_aroused` endpoint. The `null` state advances the tracked state but
+sends no request. Connection errors do not advance the tracked state, so the
+next tick retries; HTTP responses (including 409 "robot busy") do, so a busy
+arm is not hammered.
 
 ### Robot Control
 
