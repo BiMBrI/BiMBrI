@@ -6,6 +6,10 @@ which triggers a pre-recorded arm movement subroutine.
 
 From a thousand foot view, BiMBrI backend is a set of biomarker tools, with a multimodal logic layer on top. This backend passes bio-state information to a front end that acts as a control plane for robotic arms.
 
+## Demo
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/PbycTyo2zNg?si=Qg8WtobwlPnlotef" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+
 ## System Architecture
 
 $$
@@ -26,9 +30,6 @@ $$
 \text{argmax}\,P(\text{state}_t) \xrightarrow{\text{POST }/\text{trigger_rest},/\text{trigger_aroused}\text{ on state change}} \text{Robot Server} \xrightarrow{\text{lerobot-replay}} \text{SO-101 Arm}
 $$
 
-
-
-
 ## Data Sets
 
 EEG recording dataset found 
@@ -41,8 +42,6 @@ Robot movement dataset found [here](https://huggingface.co/binkd/datasets) (Nath
 
 - **rest** — places an energy drink within reach of the user
 - **aroused** — places an *exciting* beverage within reach of the user
-
-
 
 ## Tech Stack
 

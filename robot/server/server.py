@@ -9,7 +9,7 @@ COOLDOWN_SECS = 25
 # Reading writeup
 with open("static/writeup.md") as f:
     WRITEUP = f.read()
-md = mistune.create_markdown(plugins=['math', 'table'])
+md = mistune.create_markdown(plugins=['math', 'table'], renderer=mistune.HTMLRenderer(escape=False))
 writeup_html = md(WRITEUP)
 
 app = FastAPI()
