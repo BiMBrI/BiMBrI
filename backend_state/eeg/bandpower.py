@@ -6,7 +6,7 @@ to integrate the PSD over each band. Reports per-channel power (µV²) and
 relative power (% of total 1-45 Hz).
 
 Usage:
-    python bandpower.py --port /dev/ttyUSB0 --duration 20
+    python bandpower.py --port /dev/cu.usbserial-DP05INGN --duration 20
 
 Install:
     pip install brainflow numpy

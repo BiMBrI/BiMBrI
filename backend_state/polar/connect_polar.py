@@ -18,6 +18,7 @@ macOS note:
 """
 
 import argparse
+from collections import deque
 import asyncio
 import csv
 import time

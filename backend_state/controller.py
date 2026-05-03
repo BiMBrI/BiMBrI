@@ -306,7 +306,7 @@ def main() -> None:
 
     if args.polar:
         try:
-            from .polar.connect_polar import monitor_hr
+            from .polar.connect_polar import monitor_hr, monitor_resp
         except ImportError as exc:
             sys.exit(f"error: --polar requires bleak ({exc})")
         polar_slot = Slot()
@@ -319,13 +319,6 @@ def main() -> None:
             ),
         ))
 
-    notifier = (WebAppNotifier(args.webapp_url, timeout=args.webapp_timeout)
-                if args.webapp_url else None)
-
-    resp_slot: Optional[Slot] = None
-
-    if args.polar:
-        # existing polar worker...
         resp_slot = Slot()
         workers.append(PolarWorker(
             monitor_resp, resp_slot, stop_event,
@@ -335,6 +328,11 @@ def main() -> None:
                 scan_timeout=args.polar_scan_timeout,
             ),
         ))
+
+    notifier = (WebAppNotifier(args.webapp_url, timeout=args.webapp_timeout)
+                if args.webapp_url else None)
+
+    resp_slot: Optional[Slot] = None
 
     hmm = HMM()
 

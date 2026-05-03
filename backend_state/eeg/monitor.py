@@ -14,7 +14,7 @@ margin (power / threshold) wins.
 
 Usage:
     python monitor.py --port /dev/ttyUSB0 --alpha-thresh 50
-    python monitor.py --port /dev/ttyUSB0 --theta-thresh 40 --alpha-thresh 50 --beta-thresh 30
+    python backend_state/eeg/monitor.py --port /dev/cu.usbserial-DP05INGN --theta-thresh 15 --alpha-thresh 15 --beta-thresh 15
 
 Programmatic:
     for code, powers in monitor_bandpower(port="/dev/ttyUSB0", alpha_thresh=50):
