@@ -41,7 +41,7 @@ $$
 $$
 
 $$
-\text{argmax}\,P(\text{state}_t) \xrightarrow{\text{POST }/\text{trigger\_rest},/\text{trigger\_aroused}\text{ on state change}} \text{Robot Server} \xrightarrow{\text{lerobot-replay}} \text{SO-101 Arm}
+\text{argmax}\,P(\text{state}_t) \xrightarrow{\text{POST }/\text{trigger_rest},/\text{trigger_aroused}\text{ on state change}} \text{Robot Server} \xrightarrow{\text{lerobot-replay}} \text{SO-101 Arm}
 $$
 
 ## Tech Stack
@@ -76,8 +76,8 @@ $$
 \text{belief}_t \propto (T^{\!\top} \cdot \text{belief}_{t-1}) \odot \text{Bet}P_t
 $$
 
-The hand-tuned transition matrix encodes one prior fact &mdash; a direct
-rest&nbsp;$\leftrightarrow$&nbsp;arousal jump is unlikely &mdash; while leaving
+The hand-tuned transition matrix encodes one prior fact-- a direct
+rest $\leftrightarrow$ arousal jump is unlikely -- while leaving
 all other intra-row transitions a priori equally likely. The initial belief
 asserts certainty in `null`, matching "the system has just started, nothing
 observed yet".
@@ -85,8 +85,8 @@ observed yet".
 A small dispatcher (`webapp.py`) watches the argmax-ed posterior and, on a
 state *change*, POSTs to the robot server's `/trigger_rest` or
 `/trigger_aroused` endpoint. The `null` state advances the tracked state but
-sends no request. When the server refuses a trigger &mdash; either mid-replay or
-during the 25&nbsp;s post-replay cooldown, signalled as `{"ok": false}` &mdash; the
+sends no request. When the server refuses a trigger -- either mid-replay or
+during the 25s post-replay cooldown, signalled as `{"ok": false}` -- the
 dispatcher holds the refused state as *pending*, queries the `/state`
 endpoint to learn the exact `cooldown_remaining`, and waits that long before
 retrying exactly once. A fresh state from the HMM in the meantime supersedes
