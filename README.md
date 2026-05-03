@@ -2,9 +2,11 @@
 
 Beer me Brain Interface
 
-To view a detailed description visit [here](https://bimbri.github.io/BiMBrI/) or the general
-project [writeup](writeup.md). To view a detailed description of the Lerobot setup head to the 
-[lerobot](robot/lerobot.md) page.
+To view a detailed description of the models, architecture, and robotics visit 
+[here](https://bimbri.github.io/BiMBrI/) or the general project [writeup](writeup.md). 
+To view a detailed description of the how to setup Lerobot head to the [lerobot](robot/lerobot.md).
+It should be relatively self explanatory on how to run this software yourself, but since
+it requires a good amount of specialized hardware please do not expect a step by step guide.
 
 ## Setup
 
@@ -26,6 +28,7 @@ git submodule update --init --recursive
 |-------|-----------|
 | Heart rate | Polar H10 + `bleak` (BLE) |
 | EEG | OpenBCI Cyton + Daisy + `brainflow` |
+| Inference/Models TODO | IDK |
 | Robot control | LeRobot, SO-101 leader/follower arms |
 | Server | FastAPI + uvicorn |
 | Web UI | Server-Sent Events, mistune, MathJax |

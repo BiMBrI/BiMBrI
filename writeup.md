@@ -19,7 +19,21 @@ which triggers a pre-recorded arm movement subroutine.
 ## System Architecture
 
 $$
-\text{Biometric Monitor} \rightarrow \text{POST /trigger} \rightarrow \text{Robot Server} \rightarrow \text{SO-101 Arm}
+\text{Polar H10} \xrightarrow{\text{BLE}} \text{HR Monitor}
+\qquad
+\text{OpenBCI Cyton+Daisy} \xrightarrow{\text{Serial}} \text{EEG Monitor}
+$$
+
+$$
+\text{HR Monitor} + \text{EEG Monitor} \xrightarrow{\text{raw streams}} \text{Inference Server}
+$$
+
+$$
+\text{Inference Server} \xrightarrow{\text{HMM + state estimation}} P(\text{state}_t \mid \text{obs}_{1:t})
+$$
+
+$$
+P(\text{state}_t) \xrightarrow{\text{POST /trigger on state change}} \text{Robot Server} \xrightarrow{\text{lerobot-replay}} \text{SO-101 Arm}
 $$
 
 ## Tech Stack
