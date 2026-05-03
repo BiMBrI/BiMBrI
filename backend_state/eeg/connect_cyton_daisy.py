@@ -2,7 +2,7 @@
 BrainFlow connection script for OpenBCI Cyton + Daisy (16-channel EEG).
 
 Usage:
-    python connect_cyton_daisy.py --port /dev/ttyUSB0
+    python connect_cyton_daisy.py --port /dev/cu.usbserial-DP05INGN
     python connect_cyton_daisy.py --port COM3          # Windows
 
 Install:

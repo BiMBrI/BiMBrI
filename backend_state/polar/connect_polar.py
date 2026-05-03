@@ -18,14 +18,18 @@ macOS note:
 """
 
 import argparse
+from collections import deque
 import asyncio
 import csv
 import time
+from collections import deque
 from contextlib import suppress
 from typing import AsyncIterator, Optional
 
+import numpy as np
 from bleak import BleakClient, BleakScanner
 from bleak.backends.device import BLEDevice
+from scipy.signal import welch
 
 
 # Standard BLE Heart Rate Measurement characteristic (org.bluetooth.characteristic.heart_rate_measurement).
@@ -146,6 +150,24 @@ def estimate_rr_from_rr_intervals(
     peak_freq = freqs[mask][np.argmax(psd[mask])]
     return peak_freq * 60.0  # Hz -> bpm
 
+
+class RespiratoryRateEstimator:
+    """Stateful wrapper around `estimate_rr_from_rr_intervals`.
+
+    Buffers incoming RR intervals (ms) and returns the latest respiratory
+    rate estimate (breaths/min), or None until the buffer has filled to
+    `RR_WINDOW` samples.
+    """
+
+    def __init__(self, window: int = RR_WINDOW, fs_resample: float = 4.0) -> None:
+        self._buffer: deque[int] = deque(maxlen=window)
+        self._fs_resample = fs_resample
+
+    def update(self, rr_ms: int) -> float | None:
+        self._buffer.append(rr_ms)
+        return estimate_rr_from_rr_intervals(self._buffer, self._fs_resample)
+
+
 async def monitor_hr(
     threshold: int = 100,
     name: Optional[str] = None,
@@ -197,14 +219,17 @@ async def monitor_hr(
                 await client.stop_notify(HR_MEASUREMENT_UUID)
 
 async def monitor_resp(
-    threshold: float = 20.0,
+    high_threshold: float = 24.0,
+    low_threshold: float = 8.0,
     name: Optional[str] = None,
     scan_timeout: float = 10.0,
     duration: Optional[float] = None,
 ) -> AsyncIterator[tuple[int, float]]:
     """
     Yields (code, resp_bpm) per heartbeat.
-    code = 1 when resp_rate >= threshold, else 0.
+        code = 0  low_threshold < resp_rate < high_threshold (no trip)
+        code = 1  resp_rate >= high_threshold (over high)
+        code = 2  resp_rate <= low_threshold  (under low)
     """
     device = await find_polar(name, scan_timeout)
     queue: asyncio.Queue[tuple[int, float]] = asyncio.Queue()
@@ -215,7 +240,12 @@ async def monitor_resp(
         for rr_ms in rr_list:
             resp = rr_estimator.update(rr_ms)
             if resp is not None:
-                code = 1 if resp >= threshold else 0
+                if resp >= high_threshold:
+                    code = 1
+                elif resp <= low_threshold:
+                    code = 2
+                else:
+                    code = 0
                 queue.put_nowait((code, resp))
 
     async with BleakClient(device) as client:
@@ -243,17 +273,21 @@ async def stream_hr(client: BleakClient, save_path: Optional[str], stop: asyncio
     fh = open(save_path, "a", newline="") if save_path else None
     writer = csv.writer(fh) if fh else None
     if writer and fh.tell() == 0:
-        writer.writerow(["timestamp_ns", "bpm", "rr_ms"])
+        writer.writerow(["timestamp_ns", "bpm", "rr_ms", "resp_brpm"])
+
+    rr_estimator = RespiratoryRateEstimator()
 
     def on_notify(_handle: int, data: bytearray) -> None:
         t_ns = time.time_ns()
         bpm, rr_list = parse_hr_measurement(bytes(data))
         rr_str = ",".join(str(r) for r in rr_list) if rr_list else "-"
-        resp = None
+        resp: float | None = None
         for rr_ms in rr_list:
             resp = rr_estimator.update(rr_ms)
         resp_str = f"{resp:.1f}" if resp is not None else "---"
         print(f"HR {bpm:>3} bpm  rr={rr_str:<14} resp={resp_str:>5} brpm  t={t_ns}")
+        if writer:
+            writer.writerow([t_ns, bpm, rr_str, f"{resp:.2f}" if resp is not None else ""])
 
     try:
         await client.start_notify(HR_MEASUREMENT_UUID, on_notify)
