@@ -91,49 +91,34 @@ class EEGWorker(threading.Thread):
                 gen.close()
 
 
-class PolarWorker(threading.Thread):
-    """Single BLE connection to Polar; updates both HR and resp slots."""
-
-    def __init__(
-        self,
-        monitor_fn: Callable,
-        hr_slot: Slot,
-        resp_slot: Slot,
-        stop_event: threading.Event,
-        kwargs: dict,
-    ) -> None:
-        super().__init__(name="polar-worker", daemon=True)
-        self._monitor_fn = monitor_fn
-        self._hr_slot = hr_slot
-        self._resp_slot = resp_slot
-        self._stop_event = stop_event
-        self._kwargs = kwargs
-
-    def run(self) -> None:
-        try:
-            asyncio.run(self._main())
-        except Exception as exc:
-            print(f"[polar] worker error: {exc!r}", file=sys.stderr, flush=True)
-            self._stop_event.set()
-
-    async def _main(self) -> None:
-        ait = self._monitor_fn(**self._kwargs).__aiter__()
-        try:
-            while not self._stop_event.is_set():
-                try:
-                    hr_code, bpm, resp_code, resp_bpm = await asyncio.wait_for(
-                        ait.__anext__(), timeout=0.5)
-                except asyncio.TimeoutError:
-                    continue
-                except StopAsyncIteration:
-                    break
-                ts = time.monotonic()
-                self._hr_slot.update(hr_code, ts, {"bpm": bpm})
-                if resp_code is not None:
-                    self._resp_slot.update(resp_code, ts, {"bpm": resp_bpm})
-        finally:
-            with suppress(Exception):
-                await ait.aclose()
+async def polar_pump(
+    monitor_fn: Callable,
+    hr_slot: Slot,
+    resp_slot: Slot,
+    stop_event: threading.Event,
+    kwargs: dict,
+) -> None:
+    """Run the combined HR+resp generator on the current asyncio loop and
+    update both slots. Must run on the main thread's loop on macOS — bleak's
+    CoreBluetooth backend wedges on connect when called from a worker thread.
+    """
+    ait = monitor_fn(**kwargs).__aiter__()
+    try:
+        while not stop_event.is_set():
+            try:
+                hr_code, bpm, resp_code, resp_bpm = await asyncio.wait_for(
+                    ait.__anext__(), timeout=0.5)
+            except asyncio.TimeoutError:
+                continue
+            except StopAsyncIteration:
+                break
+            ts = time.monotonic()
+            hr_slot.update(hr_code, ts, {"bpm": bpm})
+            if resp_code is not None:
+                resp_slot.update(resp_code, ts, {"bpm": resp_bpm})
+    finally:
+        with suppress(Exception):
+            await ait.aclose()
 
 
 def _format_eeg(snap: tuple[Optional[int], Optional[float], dict]) -> str:
@@ -308,6 +293,56 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+async def amain(
+    *,
+    args: argparse.Namespace,
+    eeg_slot: Optional[Slot],
+    polar_slot: Optional[Slot],
+    resp_slot: Optional[Slot],
+    eeg_workers: list[threading.Thread],
+    notifier: Optional[WebAppNotifier],
+    hmm: HMM,
+    stop_event: threading.Event,
+) -> None:
+    polar_task: Optional[asyncio.Task] = None
+    if args.polar and polar_slot is not None and resp_slot is not None:
+        from .polar.connect_polar import monitor_hr_resp
+        polar_task = asyncio.create_task(polar_pump(
+            monitor_hr_resp, polar_slot, resp_slot, stop_event,
+            kwargs=dict(
+                hr_threshold=args.polar_threshold,
+                resp_high_threshold=args.resp_high_threshold,
+                resp_low_threshold=args.resp_low_threshold,
+                name=args.polar_name,
+                scan_timeout=args.polar_scan_timeout,
+            ),
+        ))
+
+    for w in eeg_workers:
+        w.start()
+
+    loop = asyncio.get_running_loop()
+    try:
+        await loop.run_in_executor(None, lambda: run_loop(
+            eeg_slot=eeg_slot,
+            polar_slot=polar_slot,
+            resp_slot=resp_slot,
+            notifier=notifier,
+            hmm=hmm,
+            tick_sec=args.tick,
+            tau_sec=args.tau,
+            stop_event=stop_event,
+        ))
+    finally:
+        stop_event.set()
+        if polar_task is not None:
+            polar_task.cancel()
+            with suppress(asyncio.CancelledError, Exception):
+                await polar_task
+        for w in eeg_workers:
+            w.join(timeout=5.0)
+
+
 def main() -> None:
     args = parse_args()
     if not (args.eeg or args.polar):
@@ -316,7 +351,7 @@ def main() -> None:
         sys.exit("error: --eeg requires --eeg-port")
 
     stop_event = threading.Event()
-    workers: list[threading.Thread] = []
+    eeg_workers: list[threading.Thread] = []
     eeg_slot: Optional[Slot] = None
     polar_slot: Optional[Slot] = None
     resp_slot: Optional[Slot] = None
@@ -327,7 +362,7 @@ def main() -> None:
         except ImportError as exc:
             sys.exit(f"error: --eeg requires brainflow ({exc})")
         eeg_slot = Slot()
-        workers.append(EEGWorker(
+        eeg_workers.append(EEGWorker(
             monitor_bandpower, eeg_slot, stop_event,
             kwargs=dict(
                 port=args.eeg_port,
@@ -344,21 +379,11 @@ def main() -> None:
 
     if args.polar:
         try:
-            from .polar.connect_polar import monitor_hr_resp
+            from .polar.connect_polar import monitor_hr_resp  # noqa: F401
         except ImportError as exc:
             sys.exit(f"error: --polar requires bleak ({exc})")
         polar_slot = Slot()
         resp_slot = Slot()
-        workers.append(PolarWorker(
-            monitor_hr_resp, polar_slot, resp_slot, stop_event,
-            kwargs=dict(
-                hr_threshold=args.polar_threshold,
-                resp_high_threshold=args.resp_high_threshold,
-                resp_low_threshold=args.resp_low_threshold,
-                name=args.polar_name,
-                scan_timeout=args.polar_scan_timeout,
-            ),
-        ))
 
     notifier = (WebAppNotifier(args.webapp_url, timeout=args.webapp_timeout)
                 if args.webapp_url else None)
@@ -373,27 +398,20 @@ def main() -> None:
     print(f"Starting: {', '.join(enabled)}  tick={args.tick}s tau={args.tau}s "
           f"webapp={args.webapp_url or 'DRY-RUN'}", flush=True)
 
-    for w in workers:
-        w.start()
-
     try:
-        run_loop(
+        asyncio.run(amain(
+            args=args,
             eeg_slot=eeg_slot,
             polar_slot=polar_slot,
             resp_slot=resp_slot,
+            eeg_workers=eeg_workers,
             notifier=notifier,
             hmm=hmm,
-            tick_sec=args.tick,
-            tau_sec=args.tau,
             stop_event=stop_event,
-        )
+        ))
     except KeyboardInterrupt:
         print("\nStopping...", flush=True)
-    finally:
-        stop_event.set()
-        for w in workers:
-            w.join(timeout=5.0)
-        print("Stopped.", flush=True)
+    print("Stopped.", flush=True)
 
 
 if __name__ == "__main__":
