@@ -17,7 +17,7 @@ with open("dist/index.html", "w") as f:
 <body>
     {html}
     <footer>
-        <p>© 2026 BiMBrI contributors.
+        <p>© 2026 Nathanael Parra and Nathaniel Chappelle.
         Software: <a href="https://opensource.org/licenses/MIT">MIT License</a>.
         Content: <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.
         Unless otherwise noted.</p>
