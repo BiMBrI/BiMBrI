@@ -5,7 +5,7 @@ import subprocess, datetime, asyncio
 app = FastAPI()
 state = {"status": "idle", "last_event": None, "last_time": None}
 
-@app.post("/trigger")
+@app.post("/trigger_rest")
 async def trigger(event: dict):
     if state["status"] == "replaying":
         raise HTTPException(status_code=409, detail="Arm is busy replaying")
@@ -15,9 +15,22 @@ async def trigger(event: dict):
     state["status"] = "replaying"
     
     asyncio.create_task(run_replay())
-    return {"ok": True}
+    return {"ok": True, "status": "rest"}
 
-async def run_replay():
+@app.post("/trigger_aroused")
+async def trigger(event: dict):
+    if state["status"] == "replaying":
+        raise HTTPException(status_code=409, detail="Arm is busy replaying")
+    
+    state["last_event"] = event
+    state["last_time"] = datetime.datetime.now().isoformat()
+    state["status"] = "replaying"
+    
+    asyncio.create_task(run_replay())
+    return {"ok": True, "status": "aroused"}
+
+# TODO update to rest subroutine
+async def run_replay_rest():
     proc = await asyncio.create_subprocess_exec(
         "lerobot-replay",
         "--robot.type=so101_follower",
@@ -28,6 +41,20 @@ async def run_replay():
     )
     await proc.wait()
     state["status"] = "idle"
+
+# TODO update to aroused subroutine
+async def run_replay_aroused():
+    proc = await asyncio.create_subprocess_exec(
+        "lerobot-replay",
+        "--robot.type=so101_follower",
+        "--robot.port=/dev/ttyACM1",
+        "--robot.id=polo",
+        "--dataset.repo_id=binkd/pick_and_place",
+        "--dataset.episode=0"
+    )
+    await proc.wait()
+    state["status"] = "idle"
+
 
 @app.get("/", response_class=HTMLResponse)
 async def ui():
