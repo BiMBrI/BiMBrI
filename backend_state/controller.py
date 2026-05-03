@@ -224,8 +224,12 @@ def run_loop(
             parts.append(_format_eeg(eeg_snap))
         if polar_slot is not None:
             parts.append(_format_polar(polar_snap))
+            hr_bpm = polar_snap[2].get("bpm", "?") if polar_snap else "?"
+            parts.append(f"hr_bpm={hr_bpm}")
         if resp_slot is not None:
             parts.append(_format_resp(resp_snap))
+            br_bpm = resp_snap[2].get("bpm", "?") if resp_snap else "?"
+            parts.append(f"br_bpm={br_bpm}")
         parts.append(f"| m=(r{combined.rest:.2f} a{combined.arousal:.2f} "
                      f"n{combined.null:.2f} θ{combined.theta:.2f})")
         parts.append(f"p=(r{belief[0]:.2f} a{belief[1]:.2f} n{belief[2]:.2f})")
