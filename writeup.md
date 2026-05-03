@@ -1,5 +1,7 @@
 # BiMBrI — Beer Me Brain Interface
 
+**Authors:** Nathanael Parra and Nathaniel Chappelle
+
 BiMBrI is a real-time robotic intervention system that responds to biometric signals from a wearable monitor.
 When a physiological event is detected (e.g. elevated arousal state), a signal is pushed to the robot server,
 which triggers a pre-recorded arm movement subroutine. 
