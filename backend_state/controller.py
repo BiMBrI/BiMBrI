@@ -207,6 +207,12 @@ def run_loop(
             parts.append(_format_eeg(eeg_snap))
         if polar_slot is not None:
             parts.append(_format_polar(polar_snap))
+        if resp_slot:
+            snap = resp_slot.snapshot()
+            if snap[0] is not None:
+                age = now - snap[1]
+                masses.append(discount(resp_rate_mass(snap[0]),
+                                       trust_from_age(age, tau_sec)))
         parts.append(f"| m=(r{combined.rest:.2f} a{combined.arousal:.2f} "
                      f"n{combined.null:.2f} θ{combined.theta:.2f})")
         parts.append(f"p=(r{belief[0]:.2f} a{belief[1]:.2f} n{belief[2]:.2f})")
@@ -242,6 +248,9 @@ def parse_args() -> argparse.Namespace:
     polar.add_argument("--polar-threshold", type=int, default=100,
                        help="BPM threshold for code=1 (default 100).")
     polar.add_argument("--polar-scan-timeout", type=float, default=10.0)
+
+    polar.add_argument("--resp-threshold", type=float, default=20.0,
+                   help="Resp rate threshold in bpm for code=1 (default 20).")
 
     fusion = p.add_argument_group("Fusion + HMM")
     fusion.add_argument("--tick", type=float, default=0.5,
@@ -308,6 +317,21 @@ def main() -> None:
 
     notifier = (WebAppNotifier(args.webapp_url, timeout=args.webapp_timeout)
                 if args.webapp_url else None)
+
+    resp_slot: Optional[Slot] = None
+
+    if args.polar:
+        # existing polar worker...
+        resp_slot = Slot()
+        workers.append(PolarWorker(
+            monitor_resp, resp_slot, stop_event,
+            kwargs=dict(
+                threshold=args.resp_threshold,
+                name=args.polar_name,
+                scan_timeout=args.polar_scan_timeout,
+            ),
+        ))
+
     hmm = HMM()
 
     enabled = []
