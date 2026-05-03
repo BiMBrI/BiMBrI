@@ -3,7 +3,7 @@ import mistune
 with open("writeup.md") as f:
     content = f.read()
 
-md = mistune.create_markdown(plugins=['math'])
+md = mistune.create_markdown(plugins=['math', 'table'])
 html = md(content)
 
 with open("dist/index.html", "w") as f:

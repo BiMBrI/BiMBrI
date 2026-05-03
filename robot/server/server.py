@@ -11,7 +11,7 @@ subscribers = []
 # Reading writeup
 with open("static/writeup.md") as f:
     WRITEUP = f.read()
-md = mistune.create_markdown(plugins=['math'])
+md = mistune.create_markdown(plugins=['math', 'table'])
 writeup_html = md(WRITEUP)
 
 # mounting js
