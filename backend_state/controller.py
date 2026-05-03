@@ -274,8 +274,8 @@ def parse_args() -> argparse.Namespace:
 
     polar = p.add_argument_group("Polar HR sensor")
     polar.add_argument("--polar", action="store_true", help="Enable Polar HR source.")
-    polar.add_argument("--polar-name", default="Polar H10",
-                       help="Substring of BLE device name (default: 'Polar H10').")
+    polar.add_argument("--polar-name",
+                       help="Substring of BLE device name (default: any 'Polar').")
     polar.add_argument("--polar-threshold", type=int, default=100,
                        help="BPM threshold for code=1 (default 100).")
     polar.add_argument("--polar-scan-timeout", type=float, default=10.0)
