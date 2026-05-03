@@ -102,6 +102,7 @@ async def polar_pump(
     update both slots. Must run on the main thread's loop on macOS — bleak's
     CoreBluetooth backend wedges on connect when called from a worker thread.
     """
+    print("[polar] pump starting", flush=True)
     ait = monitor_fn(**kwargs).__aiter__()
     try:
         while not stop_event.is_set():
