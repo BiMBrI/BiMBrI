@@ -71,9 +71,9 @@ async def run_replay_aroused():
     proc = await asyncio.create_subprocess_exec(
         "lerobot-replay",
         "--robot.type=so101_follower",
-        "--robot.port=/dev/ttyACM1",
+        "--robot.port=/dev/ttyACM0",
         "--robot.id=polo",
-        "--dataset.repo_id=binkd/pick_and_place",
+        "--dataset.repo_id=binkd/pick_aroused_can_and_place_toyota_v1",
         "--dataset.episode=0"
     )
     await proc.wait()
