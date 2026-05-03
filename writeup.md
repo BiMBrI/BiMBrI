@@ -4,8 +4,6 @@ BiMBrI is a real-time robotic intervention system that responds to biometric sig
 When a physiological event is detected (e.g. elevated arousal state), a signal is pushed to the robot server,
 which triggers a pre-recorded arm movement subroutine.
 
-
-
 ## States
 
 | State | Description |
