@@ -66,6 +66,10 @@ ECG can be used to estimate Breath Rate in bmp, another useful metric in medicin
 ### Electroencephalogram (EEG): 
 EEG is a very unique and valuable metric for all sorts of pysical state estimations. Our model uses 3 EEG subtasks, alpha bandpower, theta band power, and beta band power. Here alpha, theta, and beta refer to specific frequency ranges that are corrolated with rest / arousal states.  
 
+### REVE - logistic regression head:
+This was the begining of a logistic regression model to be trained on data from the Faller et. al. dataset for binary arousal task. We set up a pipeline to use the REVE EEG feature embedder (https://brain-bzh.github.io/reve/) before training a logistic regression model (best for binary classification tastk) on top of the rich embeddings. This project made it to REVE embeddings, but not to a full training pipeline. 
+
+
 ## Dempster Shafer Theory 
 DST is a generalization of Baysien inference that is particularly useful in combining uncertain, or conflicting data from multipul sources. In the context of BiMBrI, the output of each of out Biomarker tools is converted into a probability assingment for the frame of discerment (the set representing all states). DST provides a method of combining these probabilities to a single probability vector, with entries Probability(Arousal), Probability(Null), Probability(Rest), Probability(Ignorance). DST is able to handle conflicting probability assigments from sources by leveraging the {Ignorance} set, where uncertain probability can be assined. See more on DST [here](https://www.stat.berkeley.edu/~aldous/Real_World/dempster_shafer.pdf).
 
