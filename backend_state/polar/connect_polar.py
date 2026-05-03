@@ -304,8 +304,12 @@ async def monitor_hr_resp(
                     resp_code = 0
         queue.put_nowait((hr_code, bpm, resp_code, resp_val))
 
+    print(f"[polar] connecting to {device.name}…", flush=True)
     async with BleakClient(device) as client:
+        print(f"[polar] connected (is_connected={client.is_connected}), "
+              f"subscribing to HR notifications…", flush=True)
         await client.start_notify(HR_MEASUREMENT_UUID, on_notify)
+        print("[polar] subscribed; waiting for notifications…", flush=True)
         t_start = asyncio.get_event_loop().time()
         try:
             while True:
