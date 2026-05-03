@@ -8,6 +8,11 @@ To view a detailed description of the how to setup Lerobot head to the [lerobot]
 It should be relatively self explanatory on how to run this software yourself, but since
 it requires a good amount of specialized hardware please do not expect a step by step guide.
 
+Robot movement datasets found [here](https://huggingface.co/binkd/datasets) (Nathaniel Chappelle, 2026).
+EEG recording dataset found 
+[here](https://ieee-dataport.org/open-access/regulation-arousal-online-neurofeedback-improves-human-performance-demanding-sensory)
+(Joseph Faller, 2019).
+
 ## Setup
 
 To clone make sure to recurse-submodules:

@@ -11,6 +11,14 @@ which triggers a pre-recorded arm movement subroutine.
 | `idle` | Arm is ready, waiting for a trigger |
 | `replaying` | Arm is executing a recorded subroutine |
 
+## Data Set
+
+EEG recording dataset found 
+[here](https://ieee-dataport.org/open-access/regulation-arousal-online-neurofeedback-improves-human-performance-demanding-sensory), 
+pertinent to the binary task of arousal and no arousal, where arousal is heightened activity and energy (Joseph Faler, 2019).
+
+Robot movement dataset found [here](https://huggingface.co/binkd/datasets) (Nathaniel Chappelle, 2026).
+
 ## Subroutines
 
 - **rest** — returns the arm to a neutral resting position
