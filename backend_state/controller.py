@@ -33,7 +33,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from .adapters import bandpower_mass, heart_rate_mass
+from .adapters import bandpower_mass, heart_rate_mass, resp_rate_mass
 from .dst import IGNORANCE, Mass, combine, discount, trust_from_age
 from .hmm import HMM
 from .webapp import WebAppNotifier
@@ -144,6 +144,13 @@ def _format_polar(snap: tuple[Optional[int], Optional[float], dict]) -> str:
     return f"hr={code}({extra.get('bpm', '?')}bpm)"
 
 
+def _format_resp(snap: tuple[Optional[int], Optional[float], dict]) -> str:
+    code, _ts, extra = snap
+    if code is None:
+        return "resp=---"
+    return f"resp={code}({extra.get('bpm', '?')}bpm)"
+
+
 def _classify_notify(
     state: str,
     prev_last: Optional[str],
@@ -165,6 +172,7 @@ def run_loop(
     *,
     eeg_slot: Optional[Slot],
     polar_slot: Optional[Slot],
+    resp_slot: Optional[Slot],
     notifier: Optional[WebAppNotifier],
     hmm: HMM,
     tick_sec: float,
@@ -178,6 +186,7 @@ def run_loop(
 
         eeg_snap = eeg_slot.snapshot() if eeg_slot else None
         polar_snap = polar_slot.snapshot() if polar_slot else None
+        resp_snap = resp_slot.snapshot() if resp_slot else None
 
         if eeg_snap and eeg_snap[0] is not None:
             age = now - eeg_snap[1]
@@ -186,6 +195,10 @@ def run_loop(
         if polar_snap and polar_snap[0] is not None:
             age = now - polar_snap[1]
             masses.append(discount(heart_rate_mass(polar_snap[0]),
+                                   trust_from_age(age, tau_sec)))
+        if resp_snap and resp_snap[0] is not None:
+            age = now - resp_snap[1]
+            masses.append(discount(resp_rate_mass(resp_snap[0]),
                                    trust_from_age(age, tau_sec)))
 
         # Don't tick the HMM until at least one source has produced a sample;
@@ -211,12 +224,8 @@ def run_loop(
             parts.append(_format_eeg(eeg_snap))
         if polar_slot is not None:
             parts.append(_format_polar(polar_snap))
-        if resp_slot:
-            snap = resp_slot.snapshot()
-            if snap[0] is not None:
-                age = now - snap[1]
-                masses.append(discount(resp_rate_mass(snap[0]),
-                                       trust_from_age(age, tau_sec)))
+        if resp_slot is not None:
+            parts.append(_format_resp(resp_snap))
         parts.append(f"| m=(r{combined.rest:.2f} a{combined.arousal:.2f} "
                      f"n{combined.null:.2f} θ{combined.theta:.2f})")
         parts.append(f"p=(r{belief[0]:.2f} a{belief[1]:.2f} n{belief[2]:.2f})")
@@ -253,8 +262,10 @@ def parse_args() -> argparse.Namespace:
                        help="BPM threshold for code=1 (default 100).")
     polar.add_argument("--polar-scan-timeout", type=float, default=10.0)
 
-    polar.add_argument("--resp-threshold", type=float, default=20.0,
-                   help="Resp rate threshold in bpm for code=1 (default 20).")
+    polar.add_argument("--resp-high-threshold", type=float, default=24.0,
+                   help="Resp rate upper threshold in bpm for code=1 (default 24).")
+    polar.add_argument("--resp-low-threshold", type=float, default=8.0,
+                   help="Resp rate lower threshold in bpm for code=2 (default 8).")
 
     fusion = p.add_argument_group("Fusion + HMM")
     fusion.add_argument("--tick", type=float, default=0.5,
@@ -282,6 +293,7 @@ def main() -> None:
     workers: list[threading.Thread] = []
     eeg_slot: Optional[Slot] = None
     polar_slot: Optional[Slot] = None
+    resp_slot: Optional[Slot] = None
 
     if args.eeg:
         try:
@@ -323,7 +335,8 @@ def main() -> None:
         workers.append(PolarWorker(
             monitor_resp, resp_slot, stop_event,
             kwargs=dict(
-                threshold=args.resp_threshold,
+                high_threshold=args.resp_high_threshold,
+                low_threshold=args.resp_low_threshold,
                 name=args.polar_name,
                 scan_timeout=args.polar_scan_timeout,
             ),
@@ -331,8 +344,6 @@ def main() -> None:
 
     notifier = (WebAppNotifier(args.webapp_url, timeout=args.webapp_timeout)
                 if args.webapp_url else None)
-
-    resp_slot: Optional[Slot] = None
 
     hmm = HMM()
 
@@ -351,6 +362,7 @@ def main() -> None:
         run_loop(
             eeg_slot=eeg_slot,
             polar_slot=polar_slot,
+            resp_slot=resp_slot,
             notifier=notifier,
             hmm=hmm,
             tick_sec=args.tick,
