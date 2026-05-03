@@ -29,7 +29,7 @@ $$
 $$
 
 $$
-\text{Inference Server} \xrightarrow{\text{HMM + state estimation}} P(\text{state}_t \mid \text{obs}_{1:t})
+\text{Inference Server} \xrightarrow{\text{HMM + state estimation}} P(\text{state}_{t} \mid \text{obs}_{{1:t}})
 $$
 
 $$
