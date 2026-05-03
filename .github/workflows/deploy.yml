@@ -18,15 +18,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install cmark
-        run: sudo apt-get install -y cmark
+      - name: Install mistune
+        run: pip install mistune
 
       - name: Generate HTML
         run: |
           mkdir -p dist
           cp robot/server/static/style.css dist/style.css
-          cat > dist/index.html <<EOF
-          <!DOCTYPE html>
+          python3 - <<EOF
+          import mistune
+          with open("writeup.md") as f:
+              content = f.read()
+          html = mistune.html(content)
+          with open("dist/index.html", "w") as f:
+              f.write(f"""<!DOCTYPE html>
           <html>
           <head>
               <meta charset="utf-8">
@@ -35,7 +40,7 @@ jobs:
               <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
           </head>
           <body>
-              $(cmark writeup.md)
+              {html}
               <footer>
                   <p>© 2026 BiMBrI contributors.
                   Software: <a href="https://opensource.org/licenses/MIT">MIT License</a>.
@@ -43,10 +48,10 @@ jobs:
                   Unless otherwise noted.</p>
               </footer>
           </body>
-          </html>
+          </html>""")
           EOF
 
-      - name: Setup Pages
+        - name: Setup Pages
         uses: actions/configure-pages@v4
 
       - name: Upload artifact
