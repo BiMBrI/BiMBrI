@@ -29,14 +29,7 @@ $$
 
 
 
-## States
-
-| State | Description |
-|-------|-------------|
-| `idle` | Arm is ready, waiting for a trigger |
-| `replaying` | Arm is executing a recorded subroutine |
-
-## Data Set
+## Data Sets
 
 EEG recording dataset found 
 [here](https://ieee-dataport.org/open-access/regulation-arousal-online-neurofeedback-improves-human-performance-demanding-sensory), 
@@ -123,6 +116,13 @@ without hammering an unreachable server.
 The SO-101 leader/follower arm pair is controlled via [LeRobot](https://github.com/huggingface/lerobot).
 Subroutines are recorded through teleoperation, uploaded to Hugging Face, and replayed deterministically. 
 The leader arm is used to demonstrate a gesture once; the follower arm replays it on demand.
+
+### States
+
+| State | Description |
+|-------|-------------|
+| `idle` | Arm is ready, waiting for a trigger |
+| `replaying` | Arm is executing a recorded subroutine |
 
 ### Server
 
