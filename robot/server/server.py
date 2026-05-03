@@ -43,7 +43,7 @@ async def trigger(event: dict):
     state["last_time"] = datetime.datetime.now().isoformat()
     state["status"] = "replaying"
     await broadcast() 
-    asyncio.create_task(run_replay_rest())
+    asyncio.create_task(run_replay_arouse())
     return {"ok": True, "status": "aroused"}
 
 # TODO update to rest subroutine
@@ -53,7 +53,7 @@ async def run_replay_rest():
         "--robot.type=so101_follower",
         "--robot.port=/dev/ttyACM1",
         "--robot.id=polo",
-        "--dataset.repo_id=binkd/pick_and_place",
+        "--dataset.repo_id=binkd/pick_rest_can_and_place",
         "--dataset.episode=0"
     )
     await proc.wait()

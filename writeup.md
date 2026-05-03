@@ -21,8 +21,8 @@ Robot movement dataset found [here](https://huggingface.co/binkd/datasets) (Nath
 
 ## Subroutines
 
-- **rest** — returns the arm to a neutral resting position
-- **aroused** — executes a pick-and-place intervention gesture
+- **rest** — places an energy drink within reach of the user
+- **aroused** — places an *exciting* beverage within reach of the user
 
 ## System Architecture
 
