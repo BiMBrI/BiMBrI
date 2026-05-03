@@ -73,6 +73,9 @@ async def run_replay_aroused():
     await proc.wait()
     state["status"] = "idle"
     await broadcast()
+@app.get("/state")
+async def get_state():
+    return state
 
 @app.get("/events")
 async def events():
@@ -93,7 +96,7 @@ async def ui():
     <html>
     <head>
         <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-        <script src="/static/stat.js"></script>
+        <script src="/static/app.js"></script>
         <link rel="stylesheet" href="/static/style.css">
     </head>
     <body>
@@ -101,6 +104,8 @@ async def ui():
             <h1>Robot Status: <span id="status">loading...</span></h1>
             <p>Last event: <span id="event">-</span></p>
             <p>Time: <span id="time">-</span></p>
+            <button onclick="trigger('rest')">Trigger Rest</button>
+            <button onclick="trigger('aroused')">Trigger Aroused</button>
         </div>
         <hr>
         {writeup_html}

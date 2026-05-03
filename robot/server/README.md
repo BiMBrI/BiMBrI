@@ -10,7 +10,12 @@ uvicorn server:app --host 0.0.0.0 --port 8000
 To trigger arm (one event type currently):
 
 ```sh
-curl -X POST http://<robot-ip>:8000/trigger -H "Content-Type: application/json" -d '{"event": "threshold_exceeded"}'```
+# For rest
+curl -X POST http://<robot-ip>:8000/trigger_rest -H "Content-Type: application/json" -d '{"event": "threshold_exceeded"}'
+
+# For arousal
+curl -X POST http://<robot-ip>:8000/trigger_arousal -H "Content-Type: application/json" -d '{"event": "threshold_exceeded"}'
+```
 
 ## Networking (Eduroam)
 
