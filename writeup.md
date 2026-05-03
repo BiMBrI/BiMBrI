@@ -85,9 +85,15 @@ observed yet".
 A small dispatcher (`webapp.py`) watches the argmax-ed posterior and, on a
 state *change*, POSTs to the robot server's `/trigger_rest` or
 `/trigger_aroused` endpoint. The `null` state advances the tracked state but
-sends no request. Connection errors do not advance the tracked state, so the
-next tick retries; HTTP responses (including 409 "robot busy") do, so a busy
-arm is not hammered.
+sends no request. When the server refuses a trigger &mdash; either mid-replay or
+during the 25&nbsp;s post-replay cooldown, signalled as `{"ok": false}` &mdash; the
+dispatcher holds the refused state as *pending*, queries the `/state`
+endpoint to learn the exact `cooldown_remaining`, and waits that long before
+retrying exactly once. A fresh state from the HMM in the meantime supersedes
+the pending retry: reverting to the last-delivered state cancels it,
+`null` cancels it, and a different non-null state replaces it. Connection
+errors use a short fixed backoff so the next HMM tick can retry quickly
+without hammering an unreachable server.
 
 ### Robot Control
 
