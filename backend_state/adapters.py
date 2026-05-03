@@ -5,7 +5,7 @@ the ignorance slot m(Θ).
 
 Bandpower codes match `backend_state/eeg/monitor.py`:
 
-    0  no band over threshold      ->  null
+    0  no band over threshold      ->  pure ignorance
     1  theta band over threshold   ->  weak arousal/null hint, mostly ignorance
     2  alpha band over threshold   ->  strong rest signal
     3  beta  band over threshold   ->  no diagnostic value here, pure ignorance
@@ -31,7 +31,7 @@ from __future__ import annotations
 from .dst import Mass
 
 BANDPOWER_MASS: dict[int, Mass] = {
-    0: Mass(rest=0.0, arousal=0.0,  null=1.0,  theta=0.0),
+    0: Mass(rest=0.0, arousal=0.0,  null=0.0,  theta=1.0),
     1: Mass(rest=0.0, arousal=0.25, null=0.25, theta=0.5),
     2: Mass(rest=1.0, arousal=0.0,  null=0.0,  theta=0.0),
     3: Mass(rest=0.0, arousal=0.0,  null=0.0,  theta=1.0),
