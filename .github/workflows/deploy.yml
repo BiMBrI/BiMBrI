@@ -1,0 +1,48 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - writeup.md
+      - robot/server/static/style.css
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cmark
+        run: sudo apt-get install -y cmark
+
+      - name: Generate HTML
+        run: |
+          mkdir -p dist
+          cp robot/server/static/style.css dist/style.css
+          cat > dist/index.html <<EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <meta charset="utf-8">
+              <title>BiMBrI</title>
+              <link rel="stylesheet" href="style.css">
+              <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+          </head>
+          <body>
+              $(cmark writeup.md)
+              <footer>
+                  <p>© 2026 BiMBrI contributors.
+                  Software: <a href="https://opensource.org/licenses/MIT">MIT License</a>.
+                  Content: <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.
+                  Unless otherwise noted.</p>
+              </footer>
+          </body>
+          </html>
+          EOF
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
