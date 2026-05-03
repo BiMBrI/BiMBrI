@@ -5,6 +5,26 @@ When a physiological event is detected (e.g. elevated arousal state), a signal i
 which triggers a pre-recorded arm movement subroutine. 
 
 From a thousand foot view, BiMBrI backend is a set of biomarker tools, with a multimodal logic layer on top. This backend passes bio-state information to a front end that acts as a control plane for robotic arms.
+
+## Backend
+The BiMBrI backend is made up of 5 biomarker tools, with an unused 6th, a partially built logistic classifier. The goal of these tools is to contibute information about the user's pysical states.
+
+## Pysical States
+This tool looks for three state types, an aroused state, a resting state, and a null state. 
+
+## Biomarker Tools
+Heartrate: Heartrate is a valuable measure in medicine for Resting states, and in young adults is particularly correlated with activity level.
+Chest Electrocardiogram (ECG): ECG can be used to estimate Breath Rate in bmp, another useful metric in medicine for rest vs. arousal/activity states. Our scripts used the repo availabe from "https://www.nature.com/articles/s41598-023-50470-0".
+Electroencephalogram (EEG): EEG is a very unique and valuable metric for all sorts of pysical state estimations. Our model uses 3 EEG subtasks, alpha bandpower, theta band power, and beta band power. Here alpha, theta, and beta refer to specific frequency ranges that are corrolated with rest / arousal states.  
+
+## Dempster Shafer Theory 
+DST is a generalization of Baysien inference that is particularly useful in combining uncertain, or conflicting data from multipul sources. In the context of BiMBrI, the output of each of out Biomarker tools is converted into a probability assingment for the frame of discerment (the set representing all states). DST provides a method of combining these probabilities to a single probability vector, with entries Probability(Arousal), Probability(Null), Probability(Rest), Probability(Ignorance). DST is able to handle conflicting probability assigments from sources by leveraging the {Ignorance} set, where uncertain probability can be assined. See more on DST at " https://www.stat.berkeley.edu/~aldous/Real_World/dempster_shafer.pdf"
+
+## Hidden Markov Model
+To get an accurate current state, we take out probability vector from the DST step, and use a hiddem markov model to compare our observed state probability against our current state, and the likelyhood of moving from our current state to the state implied by our probability vector. 
+
+
+
 ## States
 
 | State | Description |
