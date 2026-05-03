@@ -45,3 +45,9 @@ curl -X POST http://fedora:8000/trigger \
   -H "Content-Type: application/json" \
   -d '{"event": "threshold_exceeded"}'
 ```
+
+### Replays
+
+Current best for rest can is toyota_v2.
+
+Current best for arousal can is NULL.
