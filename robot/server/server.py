@@ -107,6 +107,8 @@ async def ui():
     return f"""
     <html>
     <head>
+        <title>BiMBrI</title>
+        <link rel="icon" type="image/png" href="/static/favicon.png">
         <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
         <script src="/static/app.js"></script>
         <link rel="stylesheet" href="/static/style.css">

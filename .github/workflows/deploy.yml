@@ -25,6 +25,7 @@ jobs:
         run: |
           mkdir -p dist
           cp robot/server/static/style.css dist/style.css
+          cp robot/server/static/favicon.png dist/favicon.png
           python3 .github/scripts/build.py
 
       - name: Setup Pages

@@ -12,6 +12,7 @@ with open("dist/index.html", "w") as f:
 <head>
     <meta charset="utf-8">
     <title>BiMBrI</title>
+    <link rel="icon" type="image/png" href="favicon.png">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
