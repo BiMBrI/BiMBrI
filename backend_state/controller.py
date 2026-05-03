@@ -73,19 +73,19 @@ class EEGWorker(threading.Thread):
         super().__init__(name="eeg-worker", daemon=True)
         self._monitor_fn = monitor_fn
         self._slot = slot
-        self._stop = stop_event
+        self._stop_event = stop_event
         self._kwargs = kwargs
 
     def run(self) -> None:
         gen = self._monitor_fn(**self._kwargs)
         try:
             for code, powers in gen:
-                if self._stop.is_set():
+                if self._stop_event.is_set():
                     break
                 self._slot.update(code, time.monotonic(), powers)
         except Exception as exc:
             print(f"[eeg] worker error: {exc!r}", file=sys.stderr, flush=True)
-            self._stop.set()
+            self._stop_event.set()
         finally:
             with suppress(Exception):
                 gen.close()
@@ -102,7 +102,7 @@ class PolarWorker(threading.Thread):
         super().__init__(name="polar-worker", daemon=True)
         self._monitor_fn = monitor_fn
         self._slot = slot
-        self._stop = stop_event
+        self._stop_event = stop_event
         self._kwargs = kwargs
 
     def run(self) -> None:
@@ -110,12 +110,12 @@ class PolarWorker(threading.Thread):
             asyncio.run(self._main())
         except Exception as exc:
             print(f"[polar] worker error: {exc!r}", file=sys.stderr, flush=True)
-            self._stop.set()
+            self._stop_event.set()
 
     async def _main(self) -> None:
         ait = self._monitor_fn(**self._kwargs).__aiter__()
         try:
-            while not self._stop.is_set():
+            while not self._stop_event.is_set():
                 try:
                     code, bpm = await asyncio.wait_for(ait.__anext__(), timeout=0.5)
                 except asyncio.TimeoutError:
@@ -261,7 +261,8 @@ def parse_args() -> argparse.Namespace:
 
     polar = p.add_argument_group("Polar HR sensor")
     polar.add_argument("--polar", action="store_true", help="Enable Polar HR source.")
-    polar.add_argument("--polar-name", help="Substring of BLE device name (default: any 'Polar').")
+    polar.add_argument("--polar-name", default="Polar H10",
+                       help="Substring of BLE device name (default: 'Polar H10').")
     polar.add_argument("--polar-threshold", type=int, default=100,
                        help="BPM threshold for code=1 (default 100).")
     polar.add_argument("--polar-scan-timeout", type=float, default=10.0)
