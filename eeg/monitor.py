@@ -161,6 +161,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--update", type=float, default=0.25, help="Update period seconds (default 0.25)")
     p.add_argument("--mains", type=int, choices=[50, 60], default=60)
     p.add_argument("--no-filter", action="store_true")
+    p.add_argument("--timeout", type=int, default=30, help="Board ready timeout in seconds (default: 30)")
     p.add_argument("--duration", type=float, default=None, help="Stop after N seconds (default: run until Ctrl+C)")
     return p.parse_args()
 
@@ -183,6 +184,7 @@ def main() -> None:
             update_sec=args.update,
             mains=args.mains,
             apply_filter=not args.no_filter,
+            timeout=args.timeout,
             duration=args.duration,
         ):
             print(f"{time.time() - t0:6.2f}  {code:>4}  {label[code]:>5}  "
