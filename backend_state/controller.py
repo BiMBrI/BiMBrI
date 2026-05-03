@@ -10,12 +10,16 @@ once per tick so you can see exactly what is being sent.
 
 Usage:
     python -m backend_state.controller \
-        --eeg --eeg-port /dev/cu.usbserial-XYZ --eeg-alpha-thresh 50 \
+        --eeg --eeg-port /dev/cu.usbserial-DP05INGN --eeg-alpha-thresh 20 \
         --polar --polar-threshold 100 \
         --webapp-url http://localhost:8000 \
         --tick 0.5 --tau 5.0
 
 Omit --webapp-url for a dry run (no POSTs, just logs).
+python -m backend_state.controller \
+        --eeg --eeg-port /dev/cu.usbserial-DP05INGN --eeg-alpha-thresh 20 \
+        --polar --polar-threshold 100 \
+        --tick 0.5 --tau 5.0
 """
 
 from __future__ import annotations
